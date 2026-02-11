@@ -1,5 +1,5 @@
-cd /home/usrname/WiKV
-source /home/usrname/miniconda3/bin/activate WiKV
+cd /home/hongyao/WiKV
+source /home/hongyao/miniconda3/bin/activate wikv
 
 export MODEL=Qwen3-4B
 export MODEL_ID=Qwen/Qwen3-4B
@@ -16,12 +16,12 @@ export MODEL_ID=Qwen/Qwen3-4B
 #export MODEL=Ministral-8B
 #export MODEL_ID=mistralai/Ministral-8B-Instruct-2410 
 
-export dataset=/home/usrname/data/test_data
-export dataname=gov_report
-python3 prefill.py \
+export dataset=/home/hongyao/data/test_data
+export dataname=longchat
+python3 Prefill.py \
     --model_id $MODEL_ID \
     --model $MODEL \
     --dataset_name $dataname \
     --path_to_context ${dataset}/$dataname.jsonl \
-    --start 0 \
-    --end 1 \
+    --start 9 \
+    --end 10 \

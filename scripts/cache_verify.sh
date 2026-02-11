@@ -4,11 +4,11 @@ source /home/hongyao/miniconda3/bin/activate wikv
 #export MODEL=Qwen3-4B
 #export MODEL_ID=Qwen/Qwen3-4B
 
-#export MODEL=Qwen2.5-VL
-#export MODEL_ID=Qwen/Qwen2.5-VL-7B-Instruct
+export MODEL=Qwen2.5-VL
+export MODEL_ID=Qwen/Qwen2.5-VL-7B-Instruct
 
-export MODEL=Qwen2.5-VL-3B
-export MODEL_ID=Qwen/Qwen2.5-VL-3B-Instruct
+#export MODEL=Qwen2.5-VL-3B
+#export MODEL_ID=Qwen/Qwen2.5-VL-3B-Instruct
 
 #export MODEL=Qwen3-1.7B
 #export MODEL_ID=Qwen/Qwen3-1.7B
@@ -26,14 +26,14 @@ export dataset=/home/hongyao/data/test_data
 export SAVE_DIR=/home/hongyao/data/KV_cache
 
 export dataname=videomme
-python3 KV_cache.py \
+python3 cache_verify.py \
     --model_id $MODEL_ID \
     --model $MODEL \
     --dataset_name ${dataname} \
     --path_to_context ${dataset}/${dataname}.jsonl \
     --save_dir ${SAVE_DIR}/${MODEL}/${dataname}/ \
     --start 0 \
-    --end 10 \
+    --end 1 \
 
 : <<'COMMENT'
 export dataname=hotpotqa

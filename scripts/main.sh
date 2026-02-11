@@ -1,8 +1,11 @@
-cd /home/usrname/WiKV
-source /home/usrname/miniconda3/bin/activate WiKV
+cd /home/hongyao/wikv_26
+source /home/hongyao/miniconda3/bin/activate wikv
 
 export MODEL=Qwen3-4B
 export MODEL_ID=Qwen/Qwen3-4B
+
+#export MODEL=Qwen2.5-VL
+#export MODEL_ID=Qwen/Qwen2.5-VL-7B-Instruct
 
 #export MODEL=Qwen3-1.7B
 #export MODEL_ID=Qwen/Qwen3-1.7B
@@ -16,12 +19,29 @@ export MODEL_ID=Qwen/Qwen3-4B
 #export MODEL=Llama8B
 #export MODEL_ID=meta-llama/Llama-3.1-8B-Instruct
 
-export dataset=/home/usrname/data/test_data
-export SAVE_METRIC_DIR=/home/usrname/data/metric
-export SAVE_HID_DIR=/home/usrname/data/Hidden_states
-export SAVE_ATT_DIR=/home/usrname/data/Attention
-export SAVE_KV_DIR=/home/usrname/data/KV_cache
-export SAVE_ENCODE_DIR=/home/usrname/data/Encode
+# 
+export dataset=/home/hongyao/data/test_data
+export SAVE_METRIC_DIR=/home/hongyao/data/metric
+export SAVE_HID_DIR=/home/hongyao/data/Hidden_states
+export SAVE_ATT_DIR=/home/hongyao/data/Attention
+export SAVE_KV_DIR=/home/hongyao/data/KV_cache
+export SAVE_ENCODE_DIR=/home/hongyao/data/Encode
+
+
+
+export dataname=nqa
+python3 main.py \
+    --model_id $MODEL_ID \
+    --model $MODEL \
+    --dataset_name ${dataname} \
+    --path_to_context ${dataset}/${dataname}.jsonl \
+    --save_metric_dir ${SAVE_METRIC_DIR}/${MODEL} \
+    --save_kv_dir ${SAVE_KV_DIR}/${MODEL}/${dataname}/ \
+    --save_hid_dir ${SAVE_HID_DIR}/${MODEL}/${dataname}/ \
+    --save_att_dir ${SAVE_ATT_DIR}/${MODEL}/${dataname}/ \
+    --save_encode_dir ${SAVE_ENCODE_DIR}/${MODEL}/${dataname}/ \
+    --start  9 \
+    --end 10 \
 
 : <<'COMMENT'
 export dataname=nqa
@@ -106,7 +126,6 @@ python3 main.py \
     --save_encode_dir ${SAVE_ENCODE_DIR}/${MODEL}/$1/ \
     --start 3 \
     --end 4 \
-COMMENT
 
 export dataname=nqa
 python3 main.py \
@@ -121,3 +140,5 @@ python3 main.py \
     --save_encode_dir ${SAVE_ENCODE_DIR}/${MODEL}/${dataname}/ \
     --start  9 \
     --end 10 \
+
+COMMENT

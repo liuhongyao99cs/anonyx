@@ -23,8 +23,8 @@ export SAVE_ATT_DIR=/home/hongyao/data/Attention
 export SAVE_KV_DIR=/home/hongyao/data/KV_cache
 export SAVE_ENCODE_DIR=/home/hongyao/data/Encode
 
-export dataname=nqa
-python3 KIVI.py \
+export dataname=gov_report
+python3 CacheGen.py \
     --model_id $MODEL_ID \
     --model $MODEL \
     --dataset_name ${dataname} \
@@ -34,5 +34,5 @@ python3 KIVI.py \
     --save_hid_dir ${SAVE_HID_DIR}/${MODEL}/${dataname}/ \
     --save_att_dir ${SAVE_ATT_DIR}/${MODEL}/${dataname}/ \
     --save_encode_dir ${SAVE_ENCODE_DIR}/${MODEL}/${dataname}/ \
-    --start  9 \
-    --end 10 \
+    --start  0 \
+    --end 1 \

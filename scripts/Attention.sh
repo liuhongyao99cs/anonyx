@@ -1,8 +1,11 @@
-cd /home/usrname/WiKV
-source /home/usrname/miniconda3/bin/activate WiKV
+cd /home/hongyao/wikv_26
+source /home/hongyao/miniconda3/bin/activate wikv
 
-export MODEL=Qwen3-4B
-export MODEL_ID=Qwen/Qwen3-4B
+#export MODEL=Qwen3-4B
+#export MODEL_ID=Qwen/Qwen3-4B
+
+export MODEL=Qwen2.5-VL
+export MODEL_ID=Qwen/Qwen2.5-VL-7B-Instruct
 
 #export MODEL=Qwen3-1.7B
 #export MODEL_ID=Qwen/Qwen3-1.7B
@@ -16,13 +19,11 @@ export MODEL_ID=Qwen/Qwen3-4B
 #export MODEL=Ministral-8B
 #export MODEL_ID=mistralai/Ministral-8B-Instruct-2410 
 
-export dataset=/home/usrname/data/test_data
+export dataset=/home/hongyao/data/test_data
+export SAVE_HID_DIR=/home/hongyao/data/Hidden_states
+export SAVE_ATT_DIR=/home/hongyao/data/Attention
 
-export SAVE_HID_DIR=/home/usrname/data/Hidden_states
-export SAVE_ATT_DIR=/home/usrname/data/Attention
-
-
-export dataname=hotpotqa
+export dataname=videomme
 python3 Attention.py \
     --model_id $MODEL_ID \
     --model $MODEL \
@@ -34,6 +35,18 @@ python3 Attention.py \
     --end 10 \
 
 : <<'COMMENT'
+export dataname=hotpotqa
+python3 Attention.py \
+    --model_id $MODEL_ID \
+    --model $MODEL \
+    --dataset_name ${dataname} \
+    --path_to_context ${dataset}/${dataname}.jsonl \
+    --save_hid_dir ${SAVE_HID_DIR}/${MODEL}/${dataname}/ \
+    --save_att_dir ${SAVE_ATT_DIR}/${MODEL}/${dataname}/ \
+    --start 0 \
+    --end 10 \
+
+
 export dataname=nqa
 python3 Attention.py \
     --model_id $MODEL_ID \
