@@ -39,20 +39,23 @@ def load_testcases(test_file):
     return test_cases
 
 # load video from datasets
-def download_youtube_video(url, output_folder="temp_videos"):
+def download_youtube_video(url, session_id, output_folder="temp_videos"):
     """
+    download videos from the Youtube URL
     """
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     
+    save_path_template = os.path.join(output_folder, f"{session_id}.%(ext)s")
+
     ydl_opts = {
         'format': 'best[ext=mp4]/best', 
-        'outtmpl': os.path.join(output_folder, '%(id)s.%(ext)s'),
+        'outtmpl': save_path_template,         
         'quiet': True,
         'no_warnings': True
     }
 
-    print(f"Downloading YouTube videos: {url} ...")
+    print(f"Downloading YouTube video: {url} -> Target file: {session_id} ...")
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -60,30 +63,34 @@ def download_youtube_video(url, output_folder="temp_videos"):
             print(f"Finish: {filename}")
             return filename
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Download fail: {e}")
         return None
     
 def extract_frames(
     video_path: str,
     output_dir: Optional[str] = None,
-    frame_interval: int = 30,        # Extract one frame every N frames (e.g., 30 means 1 frame per second if video is 30fps)
-    time_interval: float = None,     # Or extract one frame every N seconds (e.g., 1.0 means 1 frame per second)
-    save_images: bool = True,        # Whether to save frames as image files
-    img_format: str = "jpg"          # Image format to save ('jpg', 'png', etc.)
-) -> List:
+    frame_interval: int = 30,
+    time_interval: float = None,
+    save_images: bool = True,
+    img_format: str = "jpg",
+    max_dimension: Optional[int] = 450  # <--- 新增参数：限制最长边像素 (例如 512)
+) -> List[Image.Image]:
     """
     Extract frames from a video.
 
     Args:
         video_path (str): Path to the video file.
-        output_dir (str, optional): Directory to save images. If None and save_images=True, it will be created automatically.
-        frame_interval (int): Frame interval (e.g., 30 means extract one frame every 30 frames). Mutually exclusive with time_interval, time_interval takes precedence.
-        time_interval (float, optional): Time interval (seconds), e.g., 1.0 means extract one frame every 1 second.
-        save_images (bool): Whether to save frames as image files.
-        img_format (str): Image format to save, such as 'jpg' or 'png'.
+        output_dir (str, optional): Directory to save images.
+        frame_interval (int): Extract one frame every N frames.
+        time_interval (float, optional): Extract one frame every N seconds.
+        save_images (bool): Whether to save frames as image files to disk.
+        img_format (str): Image format for saved files.
+        max_dimension (int, optional): Resize returned PIL images so the longest edge does not exceed this value. 
+                                       Helps significantly reduce token usage for LLMs. Default is 512. 
+                                       Set to None to keep original resolution.
 
     Returns:
-        List[np.ndarray]: List of extracted frames (each element is an HWC BGR image array).
+        List[PIL.Image]: List of extracted frames (resized if max_dimension is set).
     """
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Video file does not exist: {video_path}")
@@ -105,6 +112,7 @@ def extract_frames(
     frame_count = 0
     saved_count = 0
 
+    # Handle output directory for saving high-res images
     if save_images and output_dir is None:
         output_dir = os.path.splitext(video_path)[0] + "_frames"
         os.makedirs(output_dir, exist_ok=True)
@@ -115,7 +123,10 @@ def extract_frames(
             break
 
         if frame_count % frame_interval == 0:
+            # 1. 保存到列表供后续处理 (此时还是 BGR numpy 数组)
             frames.append(frame)
+            
+            # 2. 如果需要，保存原始高清图片到硬盘
             if save_images:
                 img_path = os.path.join(output_dir, f"frame_{saved_count:06d}.{img_format}")
                 cv2.imwrite(img_path, frame)
@@ -127,13 +138,22 @@ def extract_frames(
 
     print(f"Extracted {len(frames)} frames from {total_frames} total frames (FPS: {fps:.2f})")
     if save_images:
-        print(f"Images saved to: {output_dir}")
+        print(f"High-res images saved to: {output_dir}")
 
+    # Convert to PIL and Resize for Token Optimization
     pil_images = []
     for frame in frames:
+        # Convert BGR (OpenCV) to RGB (PIL)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(rgb_frame)
+        
+        # --- 核心修改：调整分辨率以减少 Token ---
+        if max_dimension is not None:
+            # thumbnail 会原地修改图片，保持长宽比，最长边不超过 max_dimension
+            pil_img.thumbnail((max_dimension, max_dimension))
+        
         pil_images.append(pil_img)
+    
 
     return pil_images
 # ====================================
@@ -450,6 +470,7 @@ def layer_dequantize(kv, max_tensors, bin, N):
         kv[i][1] = dequant_value
 
     return tensor_to_tuple(kv)
+
 
 # ===================================
 # compute metrics to judge attention accumulation
@@ -831,11 +852,11 @@ def atten_extract_(model, input_ids, attention_mask, args, session_id=0):
         layer_atten_extract_(model, input_ids, attention_mask, layer_id, args, session_id)
         
 def attention_attract_modality(args, model, inputs, doc_id):
-    HIDDEN_DIR = f"/home/hongyao/data1/Hidden_states/Qwen2.5-VL/video_mme/"
+    HIDDEN_DIR = args.save_hid_dir # "/home/hongyao/data1/Hidden_states/Qwen2.5-VL/video_mme/"
     if not os.path.exists(HIDDEN_DIR):
             os.makedirs(HIDDEN_DIR, exist_ok=True)
 
-    ATT_DIR = f"/home/hongyao/data1/Attention/Qwen2.5-VL/video_mme/"
+    ATT_DIR = args.save_att_dir #f"/home/hongyao/data1/Attention/Qwen2.5-VL/video_mme/"
     if not os.path.exists(ATT_DIR):
             os.makedirs(ATT_DIR, exist_ok=True)        
 
