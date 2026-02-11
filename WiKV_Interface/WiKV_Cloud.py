@@ -14,30 +14,23 @@ from oss2.credentials import EnvironmentVariableCredentialsProvider
 #project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #sys.path.insert(0, project_root)
 
-# ====================================
-# This is a example of loading the specified range of KV cache from ALIYUN
-# ====================================
-
 # ======= ALIYUN RAN CONTROL ==========
 # ACCESS ID
-# 
+# LTAI5tAharL4Jj1rh6K9rwum
 # ACCESS KEY
-# 
+# QNJa03avmFOYtjZOthdhkmUd3iYgno
 # LOGIN PASSWORD
-# 
+# 8308037lhy
 
 auth = oss2.ProviderAuthV4(EnvironmentVariableCredentialsProvider())
 
-# This is personal config of ALIYUN
-endpoint = "https://oss-xx-xxxxxxxx.aliyuncs.com"
-region = "xx-xxxxxxxx"
+endpoint = "https://oss-cn-hongkong.aliyuncs.com"
+region = "cn-hongkong"
 
+# yourBucketName
 bucket = oss2.Bucket(auth, endpoint, "kvcache", region=region)
 
 headers = {'x-oss-range-behavior': 'standard'}
 object_name = 'kv_quant_0.pt'
-
-# config the byte range to integrate into the pace decoding
-
 object_stream = bucket.get_object(object_name, byte_range=(500, 2000), headers=headers)
 print('standard get 500~2000 http status code:', object_stream.read())

@@ -128,7 +128,7 @@ class WiKV_Controller:
                 time.sleep(t - elapsed)
 
         with self.lock:
-            if self.filled_count == total:
+            if self.filled_count >= total:
                 self.threshold = 1
                 self.full_event.set()
                 self.ready_event.set()
@@ -520,11 +520,14 @@ class WiKV_Controller:
 
 
 
-    def boundary_predictor(self):
+    def boundary_predictor(self,args):
 
         # =======================
         # A SVM learn a boundary with full attention
         # =======================
+
+        freq = self.token_freq(args)
+        self.freq = freq
 
         if self.args.flag in ['LLM']:
 
@@ -666,7 +669,7 @@ class WiKV_Controller:
         self.load_thread.start()
     
 
-    def pace_decode(self, kv_tuple, input_idx, attention_maskx, model, tokenizer, ttft_ddl, per_token_ddl, inputs, max_new_tokens):
+    def pace_decode(self, kv_tuple, input_idx, attention_maskx, model, tokenizer, ttft_ddl, per_token_ddl, inputs, max_new_tokens, session_id):
 
         # ===================
         # pace decoding: wait sufficient KV cache buffer
@@ -692,6 +695,7 @@ class WiKV_Controller:
             BRIGHT_MAGENTA = '\033[95m'
             BRIGHT_CYAN = '\033[96m'
             BRIGHT_WHITE = '\033[97m'
+            
 
             print(f"{BOLD}{YELLOW}WiKV:\nThinking", end="", flush=True)
             self.think_st.set()
@@ -699,35 +703,37 @@ class WiKV_Controller:
             idx = 0
             seq_len = input_idx.shape[1]
 
+            # This is warm up stage
+            with torch.no_grad():
+                generated = model.generate(
+                    input_idx, 
+                    attention_mask = attention_maskx,
+                    past_key_values=kv_tuple, 
+                    max_new_tokens = 1, 
+                    eos_token_id=tokenizer.eos_token_id, 
+                    pad_token_id=tokenizer.eos_token_id, 
+                    return_dict_in_generate=True, 
+                    output_hidden_states=True,
+                    output_scores=True
+                )
+            
+            m1 = K_coverage(generated.scores[0]).item()
+            m2 = entropy(generated.scores[0]).item()
+            m3 = torch.linalg.norm(generated.hidden_states[-1][-1][0,0,:]).item()
+            m4 = self.freq[generated.sequences[0][-1].item()]
+
+            data = torch.tensor([m1, m2, m3, m4]).unsqueeze(0) 
+            decide = self.model.decision_function(data)[0]
+            startx = time.perf_counter()
+            del generated
+            self.warm_up.set()
+
             for k in range(max_new_tokens):
 
                 # max time ddl for 1st token or next tokens
                 if (k == 0 ):
                     ddl = ttft_ddl
-                    # This is warm up stage
-                    with torch.no_grad():
-                        generated = model.generate(
-                            input_idx, 
-                            attention_mask = attention_maskx,
-                            past_key_values=kv_tuple, 
-                            max_new_tokens = 1, 
-                            eos_token_id=tokenizer.eos_token_id, 
-                            pad_token_id=tokenizer.eos_token_id, 
-                            return_dict_in_generate=True, 
-                            output_hidden_states=True,
-                            output_scores=True
-                        )
                     
-                    m1 = K_coverage(generated.scores[0]).item()
-                    m2 = entropy(generated.scores[0]).item()
-                    m3 = torch.linalg.norm(generated.hidden_states[-1][-1][0,0,:]).item()
-                    m4 = self.freq[generated.sequences[0][-1].item()]
-
-                    data = torch.tensor([m1, m2, m3, m4]).unsqueeze(0) 
-                    decide = self.model.decision_function(data)[0]
-                    startx = time.perf_counter()
-                    del generated
-                    self.warm_up.set()
                 else:
                     ddl = per_token_ddl
 
@@ -739,10 +745,6 @@ class WiKV_Controller:
                 #if not self.full_event.is_set():
                 while (not self.full_event.is_set()):
                         flag = False
-                        start = time.perf_counter()
-                        kv_tuple, _ = self.probe(kv_tuple, target_device='cuda:0')
-                        end = time.perf_counter()
-                        elapsed_time = end - start
                         #print(f"Prepare {self.threshold*100}% KV CACHE for token {k}: {elapsed_time:.4f}s")
                         #del kv_pace
                         start = time.perf_counter()
@@ -759,8 +761,8 @@ class WiKV_Controller:
                                 output_hidden_states=True,
                                 output_scores=True
                             )
-                        #kv_tuple = kv_tuple1
-                        # del kv_tuple1
+
+                        kv_tuple, _ = self.probe(kv_tuple, target_device='cuda:0')
                         end = time.perf_counter()
                         elapsed_time = end - start
                         #print(f"Decode token {k}: {elapsed_time:.4f}s")
@@ -779,8 +781,8 @@ class WiKV_Controller:
 
                         del kv_tmp
 
-                        if (decide < 1e-4) and ((time.perf_counter() - token_st) < ddl) :
-                            self.step = 0.3/ ( 1 + 10 * math.e ** (-decide / 20))
+                        if (decide < 1e-2) and ((time.perf_counter() - token_st) < ddl) :
+                            self.step = 0.25/ ( 1 + 10 * math.e ** (-decide / 20))
                             del generated
                             #print("not enough")
                             continue
@@ -789,6 +791,7 @@ class WiKV_Controller:
                                 self.think_end.is_set()
                                 self.think_st.clear()
                                 print(f"{RESET}\n")
+                                print(f"{RESET}WiKV answer: ")
                             end = time.perf_counter()
                             if k == 0 : 
                                 ttft = end - token_st
@@ -802,7 +805,7 @@ class WiKV_Controller:
                             kv_tuple = generated['past_key_values']
                                 
                             del generated  
-                            self.step = 0.1
+                            self.step = 0.08
                             break
                 
                 # all KV cache is streamed
@@ -838,7 +841,6 @@ class WiKV_Controller:
             print(f"{RESET}\n")
 
         else:
-
             BOLD = '\033[1m'
             YELLOW = '\033[93m'
             RESET = '\033[0m'
@@ -855,68 +857,67 @@ class WiKV_Controller:
 
             
 
+            input_ids = inputs['input_ids']
+            attention_mask = inputs['attention_mask']
+            kv_seq_len = input_ids.shape[1] - 1
+            print(input_ids.shape[1])
+            input_ids = input_ids[:, :kv_seq_len]
+            attention_mask = attention_mask[:, :kv_seq_len]
+            seq_len = input_ids.shape[1]
+            cache_position = torch.arange(seq_len, device=inputs['input_ids'].device)
+
+            current_inputs = {
+                'input_ids': input_ids,
+                'attention_mask': attention_mask,
+                'cache_position': cache_position,
+            }
+            generated_token_history = []
+
+            # warm up
+            for i in range(1):
+                with torch.no_grad():
+                    generated = model.generate(
+                        **current_inputs,
+                        past_key_values=kv_tuple,         
+                        max_new_tokens=1,
+                        return_dict_in_generate=True,
+                        output_scores=True,
+                        output_hidden_states=True,
+                        use_cache=True,
+                        pad_token_id=tokenizer.tokenizer.eos_token_id             
+                    )
+
+            m1 = K_coverage(generated.scores[0]).item()
+            m2 = entropy(generated.scores[0]).item()
+            m3 = torch.linalg.norm(generated.hidden_states[-1][-1][0,0,:]).item()
+            m4 = self.freq[generated.sequences[0][-1].item()]
+            data = torch.tensor([m1, m2, m3, m4]).unsqueeze(0) #.to("cuda:0")  # shape: [1, 2]
+            decide = self.model.decision_function(data)[0]
+            self.warm_up.set()
+
+
             print(f"{BOLD}{YELLOW}WiKV:\nWatching video", end="", flush=True)
             self.think_st.set()
             self.start_loading_animation()
             idx = 0
             ttft = 0
-            N_token = 100
-            max_token = max_new_tokens // N_token
 
-            generated_token_history = []
-
-            for k in range(max_token):
+            for k in range(max_new_tokens):
 
                 # max time ddl for 1st token or next tokens
                 if (k == 0 ):
                     ddl = ttft_ddl
-                    # This is warm up stage
-                    with torch.no_grad():
-                        model.generate(
-                            **inputs,  
-                            max_new_tokens=1,
-                        )
 
-                    with torch.no_grad():
-                        generated = model.generate(
-                            **inputs,
-                            past_key_values=kv_tuple,         
-                            max_new_tokens=N_token,
-                            return_dict_in_generate=True,
-                            output_scores=True,
-                            output_hidden_states=True,
-                            use_cache=True             
-                        )
-
-                    decide = 0
-                    for q in range(len(generated.scores)):
-                        m1 = K_coverage(generated.scores[q]).item()
-                        m2 = entropy(generated.scores[q]).item()
-                        m3 = torch.linalg.norm(generated.hidden_states[-(len(generated.scores)-q)][-1][0,0,:]).item()
-                        m4 = self.freq[generated.sequences[0][-(len(generated.scores)-q)].item()]
-
-                        data = torch.tensor([m1, m2, m3, m4]).unsqueeze(0) #.to("cuda:0")  # shape: [1, 2]
-                        dec = self.model.decision_function(data)[0]
-                        decide += dec
-
-
-                    decide = decide / N_token
                     startx = time.perf_counter()
                     del generated
-                    self.warm_up.set()
+                    
                 else:
-                    ddl = per_token_ddl * N_token
+                    ddl = per_token_ddl
 
                 token_st = time.perf_counter()
                 flag = True
         
                 # if KV cache is not fully streamed
-                #if not self.full_event.is_set():
-                with torch.no_grad():
-                        model.generate(
-                            **inputs,  
-                            max_new_tokens=1,
-                        )
                 while (not self.full_event.is_set()):
                         flag = False
                         start = time.perf_counter()
@@ -926,17 +927,18 @@ class WiKV_Controller:
                         #print(f"Prepare {self.threshold*100}% KV CACHE for token {k}: {elapsed_time:.4f}s")
                         #del kv_pace
                         start = time.perf_counter()
-                        kv_tmp = copy.deepcopy(kv_tuple)
+                        #kv_tmp = copy.deepcopy(kv_tuple)
 
                         with torch.no_grad():
                             generated = model.generate(
-                                **inputs,       
+                                **current_inputs,       
                                 past_key_values=kv_tuple,         
-                                max_new_tokens=N_token,
+                                max_new_tokens=1,
                                 return_dict_in_generate=True,
                                 output_scores=True,
                                 output_hidden_states=True,
-                                use_cache=True             
+                                use_cache=True,
+                                pad_token_id=tokenizer.tokenizer.eos_token_id             
                             )
                         #kv_tuple = kv_tuple1
                         # del kv_tuple1
@@ -946,28 +948,26 @@ class WiKV_Controller:
 
                         # check the confidence 
                         start = time.perf_counter()
-                        decide = 0
-                        for q in range(len(generated.scores)):
-                            m1 = K_coverage(generated.scores[q]).item()
-                            m2 = entropy(generated.scores[q]).item()
-                            m3 = torch.linalg.norm(generated.hidden_states[-(len(generated.scores)-q)][-1][0,0,:]).item()
-                            m4 = self.freq[generated.sequences[0][-(len(generated.scores)-q)].item()]
+                        m1 = K_coverage(generated.scores[0]).item()
+                        m2 = entropy(generated.scores[0]).item()
+                        m3 = torch.linalg.norm(generated.hidden_states[-1][-1][0,0,:]).item()
+                        m4 = self.freq[generated.sequences[0][-1].item()]
 
-                            data = torch.tensor([m1, m2, m3, m4]).unsqueeze(0) #.to("cuda:0")  # shape: [1, 2]
-                            dec = self.model.decision_function(data)[0]
-                            decide += dec
+                        data = torch.tensor([m1, m2, m3, m4]).unsqueeze(0) #.to("cuda:0")  # shape: [1, 2]
+                        decide = self.model.decision_function(data)[0]
 
 
-                        decide = decide / N_token
                         end = time.perf_counter()
                         elapsed_time = end - start
 
-                        del kv_tmp
+                        #del kv_tmp
                         #print(f"COnfidence check for token {k}: {elapsed_time:.4f}s")
                         #print(f"Metric decide: {decide} score")
 
+                        #print(f"first tokem time: {time.perf_counter() - token_st}")
+
                         if (decide < 0.1) and ((time.perf_counter() - token_st) < ddl) :
-                            self.step = 0.25/ ( 1 + 10 * math.e ** (-decide / 20))
+                            self.step = 0.35/ ( 1 + 10 * math.e ** (-decide / 20))
                             del generated
                             #print("not enough")
                             continue
@@ -980,77 +980,62 @@ class WiKV_Controller:
                             if k == 0 : 
                                 ttft = end - token_st
                             
-                            new_token_id = generated.sequences[:, -N_token:]
-                            token = tokenizer.batch_decode(new_token_id, skip_special_tokens=True)[0]
-                            '''
-                            generated_token_history.append(new_token_id)
-                            current_decoded_text = tokenizer.batch_decode(
-                                [generated_token_history], 
-                                skip_special_tokens=True
-                            )[0]
-                            token = current_decoded_text[len(generated_token_history)-1:]
-                            '''
-                            print(f"{BOLD}{BRIGHT_WHITE}{UNDERLINE}{TALIC}{token}", end="", flush=True)
-                            input_idx = (generated.sequences[0]).unsqueeze(0)
-                            batch_size = attention_maskx.shape[0]
-                            new_tokens_mask = torch.ones(
-                                (batch_size, N_token), 
-                                device=attention_maskx.device, 
-                                dtype=attention_maskx.dtype
-                            )
-                            attention_maskx = torch.cat([attention_maskx, new_tokens_mask], dim=1)
-                            inputs['input_ids'] = input_idx
-                            inputs['attention_mask'] = attention_maskx
+                            new_token_id = generated.sequences[0, -1].item()
+                            current_inputs['input_ids'] = torch.tensor([[new_token_id]], device=current_inputs['input_ids'].device)
+
+                            current_inputs['attention_mask'] = torch.cat([
+                                current_inputs['attention_mask'],
+                                torch.ones((1, 1), device=current_inputs['attention_mask'].device, dtype=torch.long)
+                            ], dim=1)
+
+                            current_inputs['cache_position'] = current_inputs['cache_position'][-1:] + 1
+
+                            current_token = tokenizer.decode([new_token_id], skip_special_tokens=True)
+
+                            print(f"{BOLD}{BRIGHT_WHITE}{UNDERLINE}{TALIC}{current_token}", end="", flush=True)
+    
+                            if new_token_id == tokenizer.tokenizer.eos_token_id:
+                                break
                             kv_tuple = generated['past_key_values']
                                 
                             del generated  
-                            self.step = 0.08
+                            self.step = 0.15
                             break
                 
                 # all KV cache is streamed
                 if flag and self.full_event.is_set():
+                    #print(f"self.threshold:{self.threshold}\n")
                     if idx == 0:
                         idx += 1
                         kv_tuple, _ = self.probe(kv_tuple, target_device='cuda:0')
 
                     with torch.no_grad():
-                        model.generate(
-                            **inputs,  
-                            max_new_tokens=1,
-                        )
-                    with torch.no_grad():
                         generated = model.generate(
-                            **inputs,  
+                            **current_inputs,  
                             past_key_values=kv_tuple,         
                             max_new_tokens=1,
                             return_dict_in_generate=True,
                             output_scores=True,
                             output_hidden_states=True,
-                            use_cache=True             
+                            use_cache=True,
+                            pad_token_id=tokenizer.tokenizer.eos_token_id           
                         )
 
-                    input_idx = (generated.sequences[0]).unsqueeze(0)
-                    batch_size = attention_maskx.shape[0]
-                    new_tokens_mask = torch.ones(
-                        (batch_size, N_token), 
-                        device=attention_maskx.device, 
-                        dtype=attention_maskx.dtype
-                    )
-                    attention_maskx = torch.cat([attention_maskx, new_tokens_mask], dim=1)
-                    inputs['input_ids'] = input_idx
-                    inputs['attention_mask'] = attention_maskx
-                    kv_tuple = generated['past_key_values']
-                    new_token_id = generated.sequences[:, -N_token:]
-                    token = tokenizer.batch_decode(new_token_id, skip_special_tokens=True)[0]
-                    '''
-                    generated_token_history.append(new_token_id)
-                    current_decoded_text = tokenizer.batch_decode(
-                        [generated_token_history], 
-                        skip_special_tokens=True
-                    )[0]
-                    token = current_decoded_text[len(generated_token_history)-1:]
-                    '''
-                    print(f"{BOLD}{BRIGHT_WHITE}{UNDERLINE}{TALIC}{token}", end="", flush=True)
+                        new_token_id = generated.sequences[0, -1].item()
+                        current_inputs['input_ids'] = torch.tensor([[new_token_id]], device=current_inputs['input_ids'].device)
+
+                        current_inputs['attention_mask'] = torch.cat([
+                                current_inputs['attention_mask'],
+                                torch.ones((1, 1), device=current_inputs['attention_mask'].device, dtype=torch.long)
+                            ], dim=1)
+
+                        current_inputs['cache_position'] = current_inputs['cache_position'][-1:] + 1
+                        current_token = tokenizer.decode([new_token_id], skip_special_tokens=True)    
+                        kv_tuple = generated['past_key_values']
+                                
+                    print(f"{BOLD}{BRIGHT_WHITE}{UNDERLINE}{TALIC}{current_token}", end="", flush=True)
+                    if new_token_id == tokenizer.tokenizer.eos_token_id:
+                        break
                     del generated
             
             end = time.perf_counter()
@@ -1059,44 +1044,29 @@ class WiKV_Controller:
             latency = end - startx
             if latency == ttft:
                 with torch.no_grad():
-                        model.generate(
-                            **inputs,  
-                            max_new_tokens=1,
-                        )
-                with torch.no_grad():
                         generated = model.generate(
-                            **inputs,  
-                            past_key_values=kv_tuple,         
+                            **current_inputs,
+                            past_key_values=kv_tuple,
                             max_new_tokens=1,
                             return_dict_in_generate=True,
                             output_scores=True,
                             output_hidden_states=True,
-                            use_cache=True             
+                            use_cache=True,
+                            pad_token_id=tokenizer.tokenizer.eos_token_id
                         )
 
-                input_idx = (generated.sequences[0]).unsqueeze(0)
-                batch_size = attention_maskx.shape[0]
-                new_tokens_mask = torch.ones(
-                    (batch_size, N_token), 
-                    device=attention_maskx.device, 
-                    dtype=attention_maskx.dtype
-                )
-                attention_maskx = torch.cat([attention_maskx, new_tokens_mask], dim=1)
-                inputs['input_ids'] = input_idx
-                inputs['attention_mask'] = attention_maskx
-                kv_tuple = generated['past_key_values']
-                new_token_id = generated.sequences[:, -N_token:]
-                token = tokenizer.batch_decode(new_token_id, skip_special_tokens=True)[0]
-                '''
-                generated_token_history.append(new_token_id)
-                current_decoded_text = tokenizer.batch_decode(
-                    [generated_token_history], 
-                    skip_special_tokens=True
-                )[0]
-                token = current_decoded_text[len(generated_token_history)-1:]
-                '''
-                print(f"{BOLD}{BRIGHT_WHITE}{UNDERLINE}{TALIC}{token}", end="", flush=True)
+                new_token_id = generated.sequences[0, -1].item()
+                current_inputs['input_ids'] = torch.tensor([[new_token_id]], device=current_inputs['input_ids'].device)
 
+                current_inputs['attention_mask'] = torch.cat([
+                        current_inputs['attention_mask'],
+                        torch.ones((1, 1), device=current_inputs['attention_mask'].device, dtype=torch.long)
+                    ], dim=1)
+
+                current_inputs['cache_position'] = current_inputs['cache_position'][-1:] + 1
+                current_token = tokenizer.decode([new_token_id], skip_special_tokens=True)
+                kv_tuple = generated['past_key_values']
+                print(f"{BOLD}{BRIGHT_WHITE}{UNDERLINE}{TALIC}{current_token}", end="", flush=True)
             print(f"{RESET}\n")
 
         return ttft, latency
