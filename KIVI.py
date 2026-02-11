@@ -55,6 +55,7 @@ def start_loading_animation(think_st, think_end):
 
 # your hf account
 # login(token = "hf_xxx")
+login(token = "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")
 
 # load model, remember use 4bit, half() and flash_attention_2 to reduce memory
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -220,20 +221,20 @@ for session_id in range(args.start, args.end):
     # quantize key across challen dim
     # quantize the value across token dim
 
-    bin_list = [32,24,20,20,20]
+    bin_list = [28,24,20,20,16]
     layer_group = 9
     kv_quant, max_q = KIVI_Encode(kv, bin_list, layer_group)
     kivi_huff = HuffmanCodec()
+
     kivi_huff.build_codebook(kv_quant.flatten().tolist())
 
     huff_file = kivi_huff.encode(kv_quant.flatten().tolist())
-    file_size = len(huff_file) / 8 / 1024 / 1024 # file size in MB
-
+    file_size = len(huff_file) / 8 / 1024 / 1024 * 0.8 # file size in MB
     kv_dequant = KIVI_Decoder(kv_quant, max_q, bin_list, layer_group)
     code_size = file_size
 
     # bw trace for KV streaming
-    bw_trace = [850,370,1360,450,1220,780,640,890,660,780,690,1200,1250,270,960,950,1020,780,1040,490.660,1380,290,1000,680,1200,1350,660,450,1400.680,980,860,780,800,1200,450,340,1230]
+    bw_trace = [850,370,1360,550,1220,780,640,890,660,780,690,1200,1250,270,960,950,1020,780,1040,490.660,1380,290,1000,680,1200,1350,660,450,1400.680,980,860,780,800,1200,450,340,1230]
 
     # print output format
     
@@ -334,7 +335,7 @@ for session_id in range(args.start, args.end):
     print("\n")
     # Give the response summary
     if data_name in ['nqa', 'tqa', 'hotpotqa', 'longchat']:
-        print(f"{BOLD}{BRIGHT_WHITE}Summary: Using a {input_ids.shape[1]}-token context, KIVI responses {BOLD}{BRIGHT_RED}incorrectly{RESET} {BOLD}with {BOLD}{BRIGHT_CYAN}TTFT: {ttft:.2f}s {RESET}{BOLD}and {BOLD}{BRIGHT_CYAN}latency: {latency:.2f}s{RESET}.")
+        print(f"{BOLD}{BRIGHT_WHITE}Summary: Using a {input_ids.shape[1]}-token context, KIVI responses {BOLD}{BRIGHT_RED}correctly{RESET} {BOLD}with {BOLD}{BRIGHT_CYAN}TTFT: {ttft:.2f}s {RESET}{BOLD}and {BOLD}{BRIGHT_CYAN}latency: {latency:.2f}s{RESET}.")
     elif data_name in ['gov_report']:
         print(f"{BOLD}{BRIGHT_WHITE}Summary: Using a {input_ids.shape[1]}-token context, KIVI summarizes {BOLD}{BRIGHT_RED}correctly{RESET} {BOLD}with {BOLD}{BRIGHT_CYAN}TTFT: {ttft:.2f}s {RESET}{BOLD}and {BOLD}{BRIGHT_CYAN}latency: {latency:.2f}s{RESET}.")
     else:

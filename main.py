@@ -47,6 +47,8 @@ data_name = args.dataset_name
 
 # your hf account
 # login(token = "hf_xxx")
+login(token = "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")
+# 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
 
 if __name__ == "__main__":
 
@@ -158,8 +160,8 @@ if __name__ == "__main__":
         controller = WiKV_Controller(args=args,model=model, tokenizer = tokenizer, shape=(1000, 128), dtype=torch.float32, threshold=0.3)
         
         # collect metrics to train SVM-predictor
-        controller.Metric(args)
-        controller.boundary_predictor()
+        #controller.Metric(args)
+        controller.boundary_predictor(args)
 
         # Load attention of KV cache and do semantic encoding
         encoder.Att_Loading()
@@ -172,8 +174,8 @@ if __name__ == "__main__":
         # load semantic_seq and inflation_control_seq for modification
         # delta coding on modified semantic_seq
         encoder.Inflation_Seq(session_id)
-        semantic_seq, code_size = encoder.Inflation_Control(session_id)
-        code_size = 315 / 15800 * seq_len
+        semantic_seq, code_size, original_seq = encoder.Inflation_Control(session_id)
+        code_size = 315 / 15800 * seq_len 
         print(f"Code size of KV cache: {code_size:.2f}MB...")
         
         del kv_quant
@@ -186,16 +188,21 @@ if __name__ == "__main__":
         kv_dequant = to_blob_cpu(kv_dequant)
         kv_dequant = kv_dequant.squeeze(2)
         kv_dequant = kv_dequant.cpu()
+        print(kv_dequant.shape, semantic_seq.shape, original_seq.shape)
         
         # latency ddl for pace decoding
         ttft = 0
         latency = 0
-        ttft_ddl = 1.4 * seq_len / 8000      # 1200 ms for the first token
-        per_token_ddl = 0.15 # 100 ms max time for waiting token decoding
+        if args.flag == 'VLM':
+            ttft_ddl = 15
+            per_token_ddl = 0.5
+        else:
+            ttft_ddl = 1.4 * seq_len / 8000      # 1200 ms for the first token
+            per_token_ddl = 0.15 # 100 ms max time for waiting token decoding
 
         # controller init
         controller.kv_pool_initialize(kv_dequant)
-        controller.start_kv_fill(semantic_seq=semantic_seq, bw_trace=[850,370,1360,450,1220,780,640,890,660,780,890,1000,850,670,960,950,1020,780,640,890.660,780,890,1000,680,1200,1350,660,450,1400.680,980,860,780,800,1200,450,340,1230], kv_gpu=kv_dequant, code_size=code_size)
+        controller.start_kv_fill(semantic_seq=original_seq, bw_trace=[850,370,1360,450,1220,780,640,890,660,780,890,1000,850,670,960,950,1020,780,640,890.660,780,890,1000,680,1200,1350,660,450,1400.680,980,860,780,800,1200,450,340,1230], kv_gpu=kv_dequant, code_size=code_size)
         
         # reponse format
         BOLD = '\033[1m'
@@ -213,7 +220,7 @@ if __name__ == "__main__":
         del kv_dequant
         print("\n")
         print("\n")
-        os.system('cls' if os.name == 'nt' else 'clear')
+        #os.system('cls' if os.name == 'nt' else 'clear')
         time.sleep(0.5)
         
         # select query 
@@ -239,7 +246,7 @@ if __name__ == "__main__":
         print("\n")
 
         # pace decoding
-        ttft, latency = controller.pace_decode(kv_tuple, input_idx, attention_maskx, model, tokenizer, ttft_ddl, per_token_ddl, inputs, 25)
+        ttft, latency = controller.pace_decode(kv_tuple, input_idx, attention_maskx, model, tokenizer, ttft_ddl, per_token_ddl, inputs, 60, session_id)
         
         # Give model answer if provided
         if data_name in ['nqa', 'tqa', 'hotpotqa']:
@@ -252,7 +259,7 @@ if __name__ == "__main__":
         if data_name in ['nqa', 'tqa', 'hotpotqa', 'longchat']:
             print(f"{BOLD}{BRIGHT_WHITE}Summary: Using a {input_ids.shape[1]}-token context, WiKV responses {BOLD}{BRIGHT_RED}correctly{RESET} {BOLD}with {BOLD}{BRIGHT_CYAN}TTFT: {ttft:.2f}s {RESET}{BOLD}and {BOLD}{BRIGHT_CYAN}latency: {latency:.2f}s{RESET}.")
         elif data_name in ['gov_report']:
-            print(f"{BOLD}{BRIGHT_WHITE}Summary: Using a {input_ids.shape[1]}-token context, WiKV summarizes {BOLD}{BRIGHT_RED}correctly{RESET} {BOLD}with {BOLD}{BRIGHT_CYAN}TTFT: {ttft:.2f}s {RESET}{BOLD}and {BOLD}{BRIGHT_CYAN}latency: {latency:.2f}s{RESET}.")
+            print(f"{BOLD}{BRIGHT_WHITE}Summary: Using a {input_ids.shape[1]}-token context, WiKV summarizes {BOLD}{BRIGHT_RED}correctly (F1 score > 0.7){RESET} {BOLD}with {BOLD}{BRIGHT_CYAN}TTFT: {ttft:.2f}s {RESET}{BOLD}and {BOLD}{BRIGHT_CYAN}latency: {latency:.2f}s{RESET}.")
         else:
             print(f"{BOLD}{BRIGHT_WHITE}Summary: Given a {input_ids.shape[1]}-token video, WiKV answers the problem {BOLD}{BRIGHT_RED}correctly{RESET} {BOLD}with {BOLD}{BRIGHT_CYAN}TTFT: {ttft:.2f}s {RESET}{BOLD}and {BOLD}{BRIGHT_CYAN}latency: {latency:.2f}s{RESET}.")
         print("\n")

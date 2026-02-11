@@ -36,7 +36,7 @@ data_name = args.dataset_name
 
 # your hf account
 # login(token = "hf_xxx")
-login(token = "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")
+login(token = "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")
 
 
 
@@ -86,7 +86,7 @@ for session_id in range(args.start,args.end):
     elif data_name in ['gov_report']:
         input_text = data[session_id]['context'] + "Summarize the given context in 250 tokens." + " Repeat the above context."
     elif data_name in ['videomme']:
-        input_text = "Answer the question with one answer of A, B, C, D based on the provided video frames and give the reason." + data[session_id]['question']  + "Repeat the above frames."
+        input_text = "Please answer the following multiple-choice question. Select the correct option (A, B, C, or D) and provide a brief explanation for your choice. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question']
 
     
     # seperate VLM and LLM tasks
