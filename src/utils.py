@@ -351,9 +351,18 @@ class HuffmanCodec:
             pickle.dump(self.codebook, f)
     
     def load_codebook(self, filepath):
-        
+
         with open(filepath, 'rb') as f:
             self.codebook = pickle.load(f)
+        self.reverse_codebook = {code: symbol for symbol, code in self.codebook.items()}
+
+    def get_codebook(self):
+        """Return the current codebook dictionary."""
+        return self.codebook
+
+    def set_codebook(self, codebook):
+        """Set the codebook directly from a dictionary."""
+        self.codebook = codebook
         self.reverse_codebook = {code: symbol for symbol, code in self.codebook.items()}
 
 def bits_to_bytes(bit_string):
@@ -369,7 +378,7 @@ def bits_to_bytes(bit_string):
         byte_val = int(byte_str, 2) 
         byte_array.append(byte_val)
     
-    return bytes(byte_array)
+    return bytes(byte_array) 
 
 # ==================================
 # quantization: layer wise quantization
