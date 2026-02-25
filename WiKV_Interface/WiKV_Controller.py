@@ -410,7 +410,7 @@ class WiKV_Controller:
                         del generated
         else:
         # VLMS
-            datasets = ['videomme']
+            datasets = ['videomme', 'mvbench']
             freq = self.token_freq(args)
             self.freq = freq
             for datax in datasets:
@@ -423,7 +423,13 @@ class WiKV_Controller:
 
                 data = load_testcases(f'{data_parent_root}/{datax}.jsonl')
                 for session_id in range(self.num_sample):
-                    input_text = "Please answer the following multiple-choice question. Select the correct option (A, B, C, or D) and provide a brief explanation for your choice. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question']
+                    if datax in ['videomme']:
+                        input_text = "Please answer the following multiple-choice question. Select the correct option (A, B, C, or D) and provide a brief explanation for your choice. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question']
+                    elif datax in ['mvbench']:
+                        # Format candidates list as "A. xxx B. xxx C. xxx"
+                        candidates = data[session_id]['candidates']
+                        candidates_str = " ".join([f"{chr(65+i)}. {c}" for i, c in enumerate(candidates)])
+                        input_text = "Role: You are a precise visual analysis expert. Task: Watch the video and answer the following multiple-choice question with one option in the candidates. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question'] + " " + candidates_str
 
                     kv_parent_root = Path(args.save_kv_dir).parent
                     if not os.path.exists(f"{kv_parent_root}/{datax}/raw_kv_{session_id}.pt"):
@@ -433,88 +439,134 @@ class WiKV_Controller:
                     
                    
 
-                    if not os.path.exists(f"{self.args.save_metric_dir}/{datax}/k_top_{session_id}.pt"):
+                    # Check if metrics already exist, skip if so
+                    if os.path.exists(f"{self.args.save_metric_dir}/{datax}/k_top_{session_id}.pt"):
+                        #print(f"Metrics for session {session_id} already exist, skipping...")
+                        continue
 
-                        raw_kv = torch.load(f"{kv_parent_root}/{datax}/raw_kv_{session_id}.pt")
-                        bin_list = [42,42,42,42,42]
-                        layer_group = 9
-                        kv_quant, max_q = layer_quantization(raw_kv, bin_list, layer_group)
-                        kv_dequant = layer_dequantize(kv_quant, max_q, bin_list, layer_group)
-
-                        del raw_kv
-                    
+                    raw_kv = torch.load(f"{kv_parent_root}/{datax}/raw_kv_{session_id}.pt")
+                    bin_list = [42,42,42,42,42]
+                    layer_group = 9
+                    kv_quant, max_q = layer_quantization(raw_kv, bin_list, layer_group)
+                    kv_dequant = layer_dequantize(kv_quant, max_q, bin_list, layer_group)
+                    print(raw_kv.shape)
+                    del raw_kv, kv_quant
+                
+                    if datax in ['videomme']:
                         video =data_parent_root/f"{session_id}.mp4"
-
+                        # Extract frames from video at specified interval
                         frames = extract_frames(
-                            video_path = video,
+                            video_path=video,
                             time_interval=0.5,
                         )
 
-                        # Construct the message format required by Qwen2.5-VL
+                        # Prepare messages for VLM with video content
                         messages = [
                             {
-                                "role": "user", 
+                                "role": "user",
                                 "content": [
-                                    {"type": "video", "video": None}, 
-                                    {"type": "text", "text": input_text}
-                                ]
+                                    {
+                                        "type": "video",
+                                        "video": video,
+                                        "max_pixels": 360 * 420,
+                                        "fps": 2.0,  # Reduced FPS to minimize token count for demo
+                                    },
+                                    {"type": "text", "text": input_text},
+                                ],
                             }
                         ]
-
-                        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
-                        inputs = self.tokenizer(
-                            text=[text],
-                            videos=[frames],  
-                            padding=True,
-                            return_tensors="pt",
+                    elif datax in ['mvbench']:
+                        video = Path(args.video_dir) / data[session_id]["video"]
+                        frames = extract_frames(
+                            video_path=video,
+                            time_interval=0.1,
                         )
 
+                        # Prepare messages for VLM with video content
+                        messages = [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "video",
+                                        "video": video,
+                                        "max_pixels": 1600 * 1200,
+                                        "fps": 10.0,  # Reduced FPS to minimize token count for demo
+                                    },
+                                    {"type": "text", "text": input_text},
+                                ],
+                            }
+                        ]
+                                    
 
-                        # Move inputs to the same device as the model (GPU)
-                        inputs = inputs.to(self.model.device)
-                        input_ids = inputs['input_ids']
-                        attention_mask = inputs['attention_mask']
-                        print(input_ids.shape[1])
+                    text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
-                    
-                        with torch.no_grad():
-                            generated = self.model.generate(
-                                **inputs, #input_ids = input_ids,       
-                                past_key_values=kv_dequant,         
-                                max_new_tokens=100,
-                                #attention_mask = attention_mask,
-                                return_dict_in_generate=True,
-                                output_scores=True,
-                                output_hidden_states=True,
-                                use_cache=True             
-                            )
+                    inputs = self.tokenizer(
+                        text=[text],
+                        videos=[frames],  
+                        padding=True,
+                        return_tensors="pt",
+                    )
 
-                        del kv_dequant
-                        print(f"Dumping the metrics for data {datax} sample {session_id}...")
-                        if not os.path.exists(self.args.save_metric_dir):
-                            os.makedirs(self.args.save_metric_dir, exist_ok=True)
-                        if not os.path.exists(f"{self.args.save_metric_dir}/{datax}"):
-                            os.makedirs(f"{self.args.save_metric_dir}/{datax}", exist_ok=True)
-                        k_top = []
-                        entro = []
-                        activa = []
-                        t_freq = []
-                        for k in range(len(generated.scores)):
-                            k_top.append(K_coverage(generated.scores[k]).item())
-                            entro.append(entropy(generated.scores[k]).item())
-                            activa.append(torch.linalg.norm(generated.hidden_states[k][-1][0,0,:]).item())
-                            t_freq.append(freq[generated.sequences[0][input_ids.shape[1]+k].item()])
-                            #print(torch.linalg.norm(generated.hidden_states[k][-1][0,0,:]).item())
+                    del frames
 
 
-                        print(len(activa))
-                        torch.save(k_top, f"{self.args.save_metric_dir}/{datax}/k_top_{session_id}.pt")
-                        torch.save(entro, f"{self.args.save_metric_dir}/{datax}/entro_{session_id}.pt")
-                        torch.save(activa, f"{self.args.save_metric_dir}/{datax}/activation_{session_id}.pt")
-                        torch.save(t_freq, f"{self.args.save_metric_dir}/{datax}/t_freq_{session_id}.pt")
+                    # Move inputs to the same device as the model (GPU)
+                    inputs = inputs.to(self.model.device)
+                    input_ids = inputs['input_ids']
+                    attention_mask = inputs['attention_mask']
 
-                        del generated
+                    kv_seq_len = input_ids.shape[1] - 1
+                    input_ids = input_ids[:, :kv_seq_len]
+                    attention_mask = attention_mask[:, :kv_seq_len]
+                    seq_len = input_ids.shape[1]
+                    cache_position = torch.arange(seq_len, device=inputs['input_ids'].device)
+
+                    current_inputs = {
+                        'input_ids': input_ids,
+                        'attention_mask': attention_mask,
+                        'cache_position': cache_position,
+                    }
+
+                
+                    with torch.no_grad():
+                        generated = self.model.generate(
+                            #input_ids = input_ids,       
+                            **current_inputs,
+                            past_key_values=kv_dequant,         
+                            max_new_tokens=100,
+                            #attention_mask = attention_mask,
+                            return_dict_in_generate=True,
+                            output_scores=True,
+                            output_hidden_states=True,
+                            use_cache=True             
+                        )
+
+                    del kv_dequant, current_inputs, attention_mask
+                    print(f"Dumping the metrics for data {datax} sample {session_id}...")
+                    if not os.path.exists(self.args.save_metric_dir):
+                        os.makedirs(self.args.save_metric_dir, exist_ok=True)
+                    if not os.path.exists(f"{self.args.save_metric_dir}/{datax}"):
+                        os.makedirs(f"{self.args.save_metric_dir}/{datax}", exist_ok=True)
+                    k_top = []
+                    entro = []
+                    activa = []
+                    t_freq = []
+                    for k in range(len(generated.scores)):
+                        k_top.append(K_coverage(generated.scores[k]).item())
+                        entro.append(entropy(generated.scores[k]).item())
+                        activa.append(torch.linalg.norm(generated.hidden_states[k][-1][0,0,:]).item())
+                        t_freq.append(freq[generated.sequences[0][input_ids.shape[1]+k].item()])
+                        #print(torch.linalg.norm(generated.hidden_states[k][-1][0,0,:]).item())
+
+
+                    print(len(activa))
+                    torch.save(k_top, f"{self.args.save_metric_dir}/{datax}/k_top_{session_id}.pt")
+                    torch.save(entro, f"{self.args.save_metric_dir}/{datax}/entro_{session_id}.pt")
+                    torch.save(activa, f"{self.args.save_metric_dir}/{datax}/activation_{session_id}.pt")
+                    torch.save(t_freq, f"{self.args.save_metric_dir}/{datax}/t_freq_{session_id}.pt")
+
+                    del generated
 
 
 
@@ -591,7 +643,7 @@ class WiKV_Controller:
         
         else:
             
-            datasets = ['videomme']
+            datasets = ['videomme','mvbench']
             k_coverage = []
             entro = []
             acti = []
@@ -860,7 +912,7 @@ class WiKV_Controller:
             input_ids = inputs['input_ids']
             attention_mask = inputs['attention_mask']
             kv_seq_len = input_ids.shape[1] - 1
-            print(input_ids.shape[1])
+            # print(input_ids.shape[1])
             input_ids = input_ids[:, :kv_seq_len]
             attention_mask = attention_mask[:, :kv_seq_len]
             seq_len = input_ids.shape[1]

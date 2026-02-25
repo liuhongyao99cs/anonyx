@@ -1,3 +1,23 @@
+"""
+WiKV Encoder - Semantic Encoder & Inflation Control Module
+
+Features:
+1. Load and process attention weights from transformer models
+2. Apply semantic importance scoring and layer dependency
+3. Implement inflation control for KV cache compression
+4. Delta encoding + Huffman encoding for compression
+5. Support both chunked and single-file output formats
+6. GPU-accelerated dequantization for fast decoding
+
+Usage:
+    from WiKV_Encoder import WiKV_Encode
+    encoder = WiKV_Encode(args, seq_len, config, session, window_size, device)
+    encoder.Att_Loading()
+    # ... perform encoding
+
+Author: WiKV Team
+"""
+
 import pickle
 import threading
 import time
@@ -6,8 +26,10 @@ import os
 import sys
 import copy
 import random
+import numpy as np
 import torch.nn.functional as F
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from multiprocessing import cpu_count
 
 #project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #sys.path.insert(0, project_root)
@@ -21,25 +43,28 @@ class WiKV_Encode:
     def __init__(self, args, seq_len, config, session, window_size, device='cpu'):
 
         # ============
-        # args -> params, 
+        # args -> params,
         # window_size -> layer dependency
         # session is the sample id
         # seq_len is the total token num of context
         # args is the parameter of dir and config
         # ============
 
-        self.args = args    
+        self.args = args
         self.seq_len = seq_len
         self.config = config
         self.impor_score = []
         self.session = session
         self.window_size = window_size
-        #self.bin_list = [48,42,42,42,42,42,40]
+        self.device = device  # Save device
+        # VLM
+        #self.bin_list = [64,64,64,64,64,64]
         #self.bin_list = [32,32,28,24,24,20,16]
-        self.bin_list = [28,28,24,24,20,20]
+        # LLM
+        self.bin_list = [28,24,24,20,20,18]
         self.layer_group = 6
-        self.batch_size = 15000
-        self.max_deviation = 6000
+        self.batch_size = 20000
+        self.max_deviation = 10000
          
         
     def Att_Loading(self):
@@ -110,54 +135,88 @@ class WiKV_Encode:
         kv = torch.load(file_path)
         kv_quant, max_q = layer_quantization(kv, self.bin_list, self.layer_group)
         kv_dequant = layer_dequantize(kv_quant, max_q, self.bin_list, self.layer_group)
-        
+
         self.kv_quant = kv_quant
+        self.kv_dequant = kv_dequant
+        self.max_q = max_q  # Save quantization scale factor for encoding
         self.semantic_kv = kv_quant[indices[:,0],:,indices[:,1],indices[:,2],:]
 
         return kv_quant, kv_dequant
     
     
     def calculate_dist_matrix(self, batch_id):
-        """
-        Calculate L1 distance matrix for KV vectors in a batch.
 
-        Distance = L1(K[i], K[j]) + L1(V[i], V[j])
-        Used for greedy sorting to optimize compression efficiency.
+        # ================================
+        # caclutate the dist between kv vectors in seq batch_id
+        # ================================
 
-        Args:
-            batch_id: Index of the batch to process
+        # calculate the num of KV vectors in the current batch
+        lenx = 0
+        if (batch_id + 1) * self.batch_size > self.kv_seq_len:
+            lenx = self.kv_seq_len - (batch_id) * self.batch_size + 1
+        else:
+            lenx = self.batch_size
 
-        Returns:
-            Distance matrix of shape [batch_size, batch_size]
-        """
-        # Calculate batch boundaries
-        start_idx = max(0, batch_id * self.batch_size)
-        end_idx = min(self.kv_seq_len, (batch_id + 1) * self.batch_size)
-        batch_len = end_idx - start_idx
 
-        if batch_len <= 1:
-            return torch.zeros(1, 1, device=self.device)
+        initial_solution = torch.arange(0,lenx)
+        dist_matrix = -torch.ones(len(initial_solution),len(initial_solution))
+        #print(self.semantic_kv[1,0,:].unsqueeze(0))
 
-        # Check if semantic encoding has been performed
         if self.semantic_kv is None:
-            print("Error: Semantic encoding not performed before inflation control")
+            print("Error in performing semantic coding before inflation control...")
             sys.exit(1)
 
-        # Ensure float dtype for distance computation
+
         self.semantic_kv = self.semantic_kv.float()
 
-        # Extract Key and Value vectors for the batch
-        # Shape: [batch_size, hidden_dim]
-        k_batch = self.semantic_kv[start_idx:end_idx, 1, :]  # Key vectors
-        v_batch = self.semantic_kv[start_idx:end_idx, 0, :]  # Value vectors
+        # compute dist matrix based on semantic_kv
+        """
+        x = F.normalize(self.semantic_kv[max(0,(batch_id)*self.batch_size):min(self.kv_seq_len, (batch_id+1) * self.batch_size),0,:],p=2,dim=1)
+        y = F.normalize(self.semantic_kv[max(0,(batch_id)*self.batch_size):min(self.kv_seq_len, (batch_id+1) * self.batch_size),0,:],p=2,dim=1)
+        dist_matrix = x @ y.T
 
-        # Compute pairwise L1 distance: dist[i,j] = ||K[i]-K[j]||_1 + ||V[i]-V[j]||_1
-        k_dist = torch.cdist(k_batch, k_batch, p=1)  # Key distance matrix
-        v_dist = torch.cdist(v_batch, v_batch, p=1)  # Value distance matrix
-        dist_matrix = k_dist + v_dist
-
+        x = F.normalize(self.semantic_kv[max(0,(batch_id)*self.batch_size):min(self.kv_seq_len, (batch_id+1) * self.batch_size),1,:],p=2,dim=1)
+        y = F.normalize(self.semantic_kv[max(0,(batch_id)*self.batch_size):min(self.kv_seq_len, (batch_id+1) * self.batch_size),1,:],p=2,dim=1)
+        dist_matrix1 = x @ y.T
+    
+        # normalize the dist_matrix to [0,1]
+        dist_matrix = 1 - (dist_matrix + 1) / 2
+        dist_matrix1 = 1 - (dist_matrix1 + 1) / 2
+        self.dist_matrix = (dist_matrix + dist_matrix1) / 2
+        """
+        x = self.semantic_kv[max(0,(batch_id)*self.batch_size):min(self.kv_seq_len, (batch_id+1) * self.batch_size),1,:]
+        y = self.semantic_kv[max(0,(batch_id)*self.batch_size):min(self.kv_seq_len, (batch_id+1) * self.batch_size),0,:]
+        dist_matrix = torch.cdist(y,y,p=1) + torch.cdist(x,x,p=1)
         self.dist_matrix = dist_matrix
+
         return dist_matrix
+
+    def PCA_sim_sort(self, batch_id):
+        x = self.semantic_kv[
+            max(0, batch_id * self.batch_size) : min(self.kv_seq_len, (batch_id + 1) * self.batch_size),
+            0, :
+        ].float()
+
+        y = self.semantic_kv[
+            max(0, batch_id * self.batch_size) : min(self.kv_seq_len, (batch_id + 1) * self.batch_size),
+            1, :
+        ].float()
+
+        U, S, Vtx = torch.linalg.svd(x, full_matrices=False)
+        U, S, Vty = torch.linalg.svd(y, full_matrices=False)
+
+        pcx1 = Vtx[0]
+        pcy1 = Vty[0]
+        projectionx = x @ pcx1
+        projectiony = y @ pcy1
+
+        sorted_indicex = torch.argsort(projectionx, descending=True)
+        sorted_indicex = [val.item() + batch_id * self.batch_size for val in sorted_indicex]
+
+        sorted_indicey = torch.argsort(projectiony, descending=True)
+        sorted_indicey = [val.item() + batch_id * self.batch_size for val in sorted_indicey]
+
+        return sorted_indicex
 
     def greedy_sort(self, batch_id: int) -> list:
         """
@@ -187,7 +246,7 @@ class WiKV_Encode:
 
         # Greedily select nearest neighbor with ±500 constraint
         for i in range(1, B):
-            distances = self.dist_matrix[current].clone()  
+            distances = self.dist_matrix[current].clone()  # Avoid inplace modification of original matrix
 
             # Mask out visited nodes
             distances = distances.masked_fill(visited, float('inf'))
@@ -213,6 +272,118 @@ class WiKV_Encode:
 
         return path
 
+    def constrained_two_opt(self, max_iter=4, batch_id=0, improve_threshold=3):
+
+        # ========================
+        # code inflation control to obtain a modified seq with higher efficiency
+        # ========================
+
+        print("Optimize the semantic sequence to control inflation...")
+
+        n = 0
+        if (batch_id+1) * self.batch_size > self.kv_seq_len:
+            n = self.kv_seq_len - (batch_id) * self.batch_size 
+        else:
+            n = self.batch_size
+        
+        seq = list(range(n))  # initialize [0, 1, 2, ..., n-1]
+        
+        # calculate the distance between nodes in seq
+        def calculate_total_distance(path):
+            total = 0.0
+            for i in range(1, n):
+                total += self.dist_matrix[path[i-1], path[i]]
+            return total
+
+        current_distance = calculate_total_distance(seq)
+        best_solution = copy.deepcopy(seq)
+        best_distance = current_distance
+        print(f"Initial distance: {current_distance:.2f}")
+
+        # compute the distance delta of 
+        def get_swap_delta(path, i, j):
+
+            if i == j:
+                return 0.0
+            if i > j:
+                i, j = j, i
+
+            # maintain the values before swap
+            delta = 0.0
+            dist = self.dist_matrix
+            val_i, val_j = path[i], path[j]  
+           
+
+            # --- delete old edge ---
+            if i > 0:
+                delta -= dist[path[i-1], val_i]
+            if i < n - 1:
+                delta -= dist[val_i, path[i+1]]
+            if j > 0:
+                delta -= dist[path[j-1], val_j]
+            if j < n - 1:
+                delta -= dist[val_j, path[j+1]]
+
+            # if adjacent
+            if j == i + 1:
+                delta += dist[val_i, val_j]
+
+            # --- add new edge ---
+            if i > 0:
+                delta += dist[path[i-1], val_j] 
+            if i < n - 1:
+                delta += dist[val_j, path[i+1]]
+            if j > 0:
+                delta += dist[path[j-1], val_i]  
+            if j < n - 1:
+                delta += dist[val_i, path[j+1]]
+
+            if j == i + 1:
+                delta -= dist[val_j, val_i]
+
+            return delta
+
+        # 
+        def is_valid_swap(i, j, seq):
+            return abs(seq[j] - i) <= self.max_deviation and abs(seq[i] - j) <= self.max_deviation
+        
+
+        for iteration in range(max_iter):
+            improved = False
+
+            # loop all swap pairs
+            num = random.randint(0, 5)
+            for i in range(num,n,random.randint(3, 5)):
+                # select valid j under constraint
+                st = max(seq[i]-self.max_deviation,i+2)
+                ed = min(n,seq[i]+self.max_deviation)
+                for j in range(st,ed,2): 
+                    #if not is_valid_swap(i, j, seq):
+                        #continue
+
+                    delta = get_swap_delta(seq, i, j)
+
+                    if delta < -improve_threshold:  
+
+                        seq[i], seq[j] = seq[j], seq[i]
+                        current_distance += delta
+                        best_solution = seq
+                        best_distance = current_distance
+
+                        #print(f"Iter {iteration}: swap ({i}, {j}), new dist = {best_distance:.2f}")
+
+                        improved = True 
+
+
+            if not improved:
+                break
+
+        current_distance = calculate_total_distance(seq)
+        print(f"Batch {batch_id}: Optimized seq distance: {current_distance:.2f}")
+        best_solution = [ val + batch_id * self.batch_size for val in best_solution ]
+
+        return best_solution, best_distance
+
     def Inflation_Seq(self, session_id):
         """
         Compute or load inflation control sequences for all batches.
@@ -236,20 +407,27 @@ class WiKV_Encode:
         # Process each batch sequentially
         if not os.path.exists(f"{self.args.save_encode_dir}/Inflation_greedy"):
             os.makedirs(f"{self.args.save_encode_dir}/Inflation_greedy", exist_ok=True)
-            for batch_id in range(total_batches):
-                # Define output file path for this batch's sorted sequence
-                output_file = f"{save_dir}/seq_inflation_{session_id}_batch{batch_id}_.pt"
 
-                # Step 1: Compute distance matrix for current batch
-                # Calculates pairwise L1 distances between KV vectors
-                self.calculate_dist_matrix(batch_id=batch_id)
+        
+        for batch_id in range(total_batches):
+            # Define output file path for this batch's sorted sequence
+            output_file = f"{save_dir}/seq_inflation_{session_id}_batch{batch_id}_.pt"
 
-                # Step 2: Apply greedy nearest-neighbor sorting
-                # Optimizes sequence order to minimize code inflation
-                sorted_sequence = self.greedy_sort(batch_id=batch_id)
+            # Skip this batch if the output file already exists
+            if os.path.exists(output_file):
+                #print(f"Batch {batch_id} already processed, skipping...")
+                continue
 
-                # Step 3: Save sorted sequence to disk for reuse
-                torch.save(sorted_sequence, output_file)
+            # Step 1: Compute distance matrix for current batch
+            # Calculates pairwise L1 distances between KV vectors
+            self.calculate_dist_matrix(batch_id=batch_id)
+
+            # Step 2: Apply greedy nearest-neighbor sorting
+            # Optimizes sequence order to minimize code inflation
+            sorted_sequence = self.greedy_sort(batch_id=batch_id)
+
+            # Step 3: Save sorted sequence to disk for reuse
+            torch.save(sorted_sequence, output_file)
 
     def Inflation_Control(self, session_id):
         """
@@ -302,6 +480,7 @@ class WiKV_Encode:
         # KV tensor indexing: [layer, kv_type(0=K,1=V), seq_pos, hidden_dim]
 
         modified_sequence = self.sorted_sequence[modify_seq]
+        #modified_sequence = self.sorted_sequence
 
         # Extract reordered Key and Value vectors separately for encoding
         # kv_quant shape: [num_layers, 2(K/V), seq_len, hidden_dim]
@@ -325,7 +504,7 @@ class WiKV_Encode:
         # - Use larger chunks for better compression ratio and fewer I/O ops
 
         # Increased chunk size for better compression and reduced overhead
-        CODE_SIZE = 1_000 * 256  # 256K samples per chunk (2x larger)
+        CODE_SIZE = 1_000 * 128  # 256K samples per chunk (2x larger)
 
         total_code_size = 0
         code_final = []
@@ -436,3 +615,520 @@ class WiKV_Encode:
         # sorted_sequence: Original semantic order (for debugging/comparison)
 
         return modified_sequence, total_code_size, self.sorted_sequence
+
+    def decode_inflation_control(self, session_id, output_dir=None):
+        """
+        Decode Inflation_Control encoded data (used with modified encoding function).
+
+        Note: The original Inflation_Control function does not save encoded data to files.
+        To use this decode function, the encoding function needs to be modified to save:
+        1. Encoded binary data
+        2. Metadata (shape, sequence info, etc.)
+
+        Args:
+            session_id: Session ID
+            output_dir: Output directory (default: save_encode_dir/Huffman)
+
+        Returns:
+            kv_dequant: Decoded KV cache
+            decode_time: Decoding time
+        """
+        import numpy as np
+        import pickle
+        import struct
+
+        start_total = time.perf_counter()
+
+        if output_dir is None:
+            huffman_dir = f"{self.args.save_encode_dir}Huffman"
+        else:
+            huffman_dir = output_dir
+
+        # Load metadata
+        meta_path = f"{huffman_dir}/meta_{session_id}.pkl"
+        if not os.path.exists(meta_path):
+            print(f"Error: Metadata not found: {meta_path}")
+            print("Please ensure encoding saves metadata.")
+            return None, 0
+
+        with open(meta_path, 'rb') as f:
+            meta = pickle.load(f)
+
+        k_shape = meta['k_shape']
+        v_shape = meta['v_shape']
+        modified_sequence = meta['modified_sequence']
+        n_chunks_key = meta.get('n_chunks_key', 0)
+        n_chunks_val = meta.get('n_chunks_val', 0)
+
+        # Bytes to bits
+        def bytes_to_bits(byte_data):
+            bits = []
+            for byte in byte_data:
+                bits.append(format(byte, '08b'))
+            return ''.join(bits)
+
+        # Delta decode (NumPy version)
+        def delta_decode_numpy(deltas):
+            if len(deltas) == 0:
+                return deltas
+            result = np.empty_like(deltas)
+            result[0] = deltas[0]
+            result[1:] = np.cumsum(deltas[1:])
+            return result
+
+        # Decode Key or Value sequence
+        def decode_sequence(is_key=True, shape=None, n_chunks=0):
+            prefix = 'key' if is_key else 'val'
+            all_decoded = []
+            total_elements = np.prod(shape)
+
+            for chunk_idx in range(n_chunks):
+                encoded_path = f"{huffman_dir}/encoded_{prefix}_{session_id}_{chunk_idx}.bin"
+                codebook_path = f"{huffman_dir}/codebook_{prefix}_{session_id}_{chunk_idx}.pt"
+
+                if not os.path.exists(encoded_path):
+                    print(f"Warning: Encoded file not found: {encoded_path}")
+                    continue
+                if not os.path.exists(codebook_path):
+                    print(f"Warning: Codebook not found: {codebook_path}")
+                    continue
+
+                # Read encoded data (format: n_bits (4 bytes), data...)
+                with open(encoded_path, 'rb') as f:
+                    header = f.read(4)
+                    if len(header) == 4:
+                        (n_bits,) = struct.unpack('I', header)
+                        encoded_bytes = f.read()
+                    else:
+                        encoded_bytes = header + f.read()
+                        n_bits = len(encoded_bytes) * 8
+
+                # Convert to bits
+                bit_string = bytes_to_bits(encoded_bytes)
+                bit_string = bit_string[:n_bits]
+
+                # Huffman decode
+                huff = HuffmanCodec()
+                huff.load_codebook(codebook_path)
+                decoded_symbols = huff.decode(bit_string)
+
+                all_decoded.extend(decoded_symbols)
+
+            # Truncate to expected length and convert type
+            all_decoded = np.array(all_decoded[:total_elements], dtype=np.int8)
+
+            # Delta decode
+            decoded_array = delta_decode_numpy(all_decoded)
+
+            return decoded_array.reshape(shape)
+
+        print(f"Decoding session {session_id}...")
+
+        # Decode Key and Value
+        k_decoded = decode_sequence(True, k_shape, n_chunks_key)
+        v_decoded = decode_sequence(False, v_shape, n_chunks_val)
+
+        # Reconstruct KV cache
+        num_layers = self.kv_quant.shape[0]
+        kv_tensor = torch.zeros(num_layers, 2, k_shape[0], k_shape[1], dtype=torch.int8)
+
+        # Place decoded data back to original positions based on modified_sequence
+        for idx, (layer, seq_pos, head) in enumerate(modified_sequence):
+            kv_tensor[layer, 0, seq_pos, :] = k_decoded[idx]
+            kv_tensor[layer, 1, seq_pos, :] = v_decoded[idx]
+
+        # Dequantize
+        kv_dequant = self._dequantize_kv(kv_tensor)
+
+        end_total = time.perf_counter()
+        decode_time = end_total - start_total
+
+        print(f"Decoding completed in {decode_time:.2f}s")
+        return kv_dequant, decode_time
+
+    def Inflation_Control_v1(self, session_id, use_parallel=True, chunk_size=None):
+        """
+        Full version v1: Encode and save as single file, supports OSS upload and subsequent decoding.
+
+        Process:
+        1. Load inflation control sequence
+        2. Reorder KV cache
+        3. First-order Delta encoding
+        4. Huffman encoding (build codebook per chunk, but concatenate encoded data directly)
+        5. Save as single file: metadata + Key codebook + Key encoded data + Value codebook + Value encoded data
+
+        Output file structure (single file):
+        [meta_len: 4 bytes][metadata: pickle]
+        [key_codebook_len: 4 bytes][key_codebook: pickle]
+        [key_data_len: 4 bytes][key_encoded_data: bytes]
+        [val_codebook_len: 4 bytes][val_codebook: pickle]
+        [val_data_len: 4 bytes][val_encoded_data: bytes]
+
+        Args:
+            session_id: Session ID
+            use_parallel: Whether to use parallel processing (default True)
+            chunk_size: Chunk size (default 128K)
+
+        Returns:
+            modified_sequence: Reordered sequence
+            total_code_size: Compressed size (MB)
+            sorted_sequence: Original semantic sequence
+            encode_time: Encoding time
+            compressed_file_path: Single compressed file path (for upload)
+        """
+        import struct
+
+        file_path = os.path.join(self.args.save_kv_dir, f"raw_kv_{self.session}.pt")
+        kv = torch.load(file_path)
+        kv_quant, max_q = layer_quantization(kv, self.bin_list, self.layer_group)
+
+        start_total = time.perf_counter()
+
+        # =========================================================================
+        # Step 1: Load inflation control sequence
+        # =========================================================================
+        inflation_dir = f"{self.args.save_encode_dir}/Inflation_greedy"
+        if not os.path.exists(inflation_dir):
+            print("Error: Inflation control sequences not found.")
+            print(f"Please run Inflation_Seq() first to generate: {inflation_dir}")
+            sys.exit(1)
+
+        modify_seq = []
+        num_batches = self.kv_seq_len // self.batch_size + 1
+        for batch_id in range(num_batches):
+            batch_file = os.path.join(inflation_dir, f"seq_inflation_{session_id}_batch{batch_id}_.pt")
+            batch_seq = torch.load(batch_file, weights_only=True)
+            modify_seq.extend(batch_seq)
+
+        # =========================================================================
+        # Step 2: Reorder KV cache
+        # =========================================================================
+        modified_sequence = self.sorted_sequence[modify_seq]
+
+        # Extract reordered Key and Value
+        k_seq = kv_quant[modified_sequence[:, 0], 0, modified_sequence[:, 1], modified_sequence[:, 2], :]
+        v_seq = kv_quant[modified_sequence[:, 0], 1, modified_sequence[:, 1], modified_sequence[:, 2], :]
+
+        # =========================================================================
+        # Step 3: Prepare output directory
+        # =========================================================================
+        huffman_dir = f"{self.args.save_encode_dir}Huffman_v1"
+        os.makedirs(huffman_dir, exist_ok=True)
+
+        CODE_SIZE = 1_000 * 128  # 128K samples per chunk
+        total_code_size = 0
+
+        # =========================================================================
+        # Step 4: Delta encoding + Huffman encoding
+        # =========================================================================
+
+        def encode_sequence(data_seq, is_key=True):
+            """Encode Key or Value sequence, return (codebook_dict, encoded_bytes, total_bits)"""
+            prefix = 'key' if is_key else 'val'
+            print(f"Huffman encoding {prefix}s: {len(data_seq)} samples")
+
+            # First-order Delta encoding
+            flat_deltas, first_sample = delta_encode(data_seq)
+            flat_deltas = flat_deltas.tolist()
+
+            # Chunking
+            chunk_ranges = [(i, min(i + CODE_SIZE, len(flat_deltas)))
+                           for i in range(0, len(flat_deltas), CODE_SIZE)]
+
+            codebooks = {}  # {chunk_idx: codebook_dict}
+            encoded_chunks = []
+            total_bits = 0
+
+            def process_chunk(args):
+                chunk_idx, (start, end) = args
+                chunk = flat_deltas[start:end]
+
+                # Build codebook
+                huff = HuffmanCodec()
+                huff.build_codebook(chunk)
+
+                # Encode
+                encoded_bits = huff.encode(chunk)
+                encoded_bytes = bits_to_bytes(encoded_bits)
+
+                return chunk_idx, huff.get_codebook(), encoded_bytes, len(encoded_bits), len(encoded_bytes)
+
+            # Parallel processing
+            with ThreadPoolExecutor(max_workers=min(16, len(chunk_ranges))) as executor:
+                results = list(executor.map(process_chunk, enumerate(chunk_ranges)))
+
+            for chunk_idx, codebook, enc_bytes, n_bits, n_bytes in results:
+                codebooks[chunk_idx] = codebook
+                encoded_chunks.append(enc_bytes)
+                total_bits += n_bits
+
+            # Concatenate all encoded data
+            all_encoded = b''.join(encoded_chunks)
+
+            # Build codebook dict
+            codebook_dict = {
+                'first_sample': first_sample,  # First sample (for reconstruction)
+                'n_chunks': len(chunk_ranges),
+                'chunk_ranges': chunk_ranges,
+                'codebooks': codebooks,
+                'chunk_bytes': [r[4] for r in results],  # Bytes per chunk (for precise decoding)
+                'chunk_bits': [r[3] for r in results],  # Raw bits per chunk (kept for reference)
+                'use_delta2': False  # Use first-order difference
+            }
+
+            size_mb = total_bits / 8 / 1024 / 1024
+            print(f"  {prefix.capitalize()} encoding size: {size_mb:.1f} MB")
+
+            return codebook_dict, all_encoded, total_bits
+
+        # Encode Key
+        key_codebook, key_encoded, key_bits = encode_sequence(k_seq, is_key=True)
+        total_code_size += key_bits / 8 / 1024 / 1024
+
+        # Encode Value
+        val_codebook, val_encoded, val_bits = encode_sequence(v_seq, is_key=False)
+        total_code_size += val_bits / 8 / 1024 / 1024
+
+        # =========================================================================
+        # Step 5: Save as single file
+        # =========================================================================
+        # Metadata (contains quantization parameters)
+        meta = {
+            'k_shape': k_seq.shape,
+            'v_shape': v_seq.shape,
+            'modified_sequence': modified_sequence,
+            'session_id': session_id,
+            'bin_list': self.bin_list,           # Quantization parameters
+            'layer_group': self.layer_group,     # Quantization parameters
+            'kv_shape': self.kv_quant.shape,     # Full KV shape
+            'max_q': self.max_q,                 # Quantization scale factor
+        }
+
+        # Build single file
+        compressed_path = f"{huffman_dir}/compressed_{session_id}.bin"
+
+        with open(compressed_path, 'wb') as f:
+            # Write metadata
+            meta_bytes = pickle.dumps(meta)
+            f.write(struct.pack('I', len(meta_bytes)))
+            f.write(meta_bytes)
+
+            # Write Key codebook
+            key_cb_bytes = pickle.dumps(key_codebook)
+            f.write(struct.pack('I', len(key_cb_bytes)))
+            f.write(key_cb_bytes)
+
+            # Write Key encoded data
+            f.write(struct.pack('I', len(key_encoded)))
+            f.write(key_encoded)
+
+            # Write Value codebook
+            val_cb_bytes = pickle.dumps(val_codebook)
+            f.write(struct.pack('I', len(val_cb_bytes)))
+            f.write(val_cb_bytes)
+
+            # Write Value encoded data
+            f.write(struct.pack('I', len(val_encoded)))
+            f.write(val_encoded)
+
+        end_total = time.perf_counter()
+        encode_time = end_total - start_total
+        total_bits = key_bits + val_bits
+        print(f"Encoding time: {encode_time:.2f}s ({total_bits/encode_time/1e6:.2f} Mbits/s)")
+
+        return modified_sequence, total_code_size, self.sorted_sequence, encode_time, compressed_path
+
+    def decode_inflation_control_v1(self, session_id, compressed_file=None):
+        """
+        Decode Inflation_Control_v1 encoded data (single file version).
+
+        Decode process: Huffman decode -> First-order Delta decode
+
+        Args:
+            session_id: Session ID
+            compressed_file: Compressed file path (default: save_encode_dir/Huffman_v1/compressed_{session_id}.bin)
+
+        Returns:
+            kv_dequant: Decoded KV cache
+            decode_time: Decoding time
+        """
+        import numpy as np
+        import pickle
+        import struct
+
+        start_total = time.perf_counter()
+
+        # Determine compressed file path
+        if compressed_file is None:
+            compressed_file = f"{self.args.save_encode_dir}Huffman_v1/compressed_{session_id}.bin"
+
+        if not os.path.exists(compressed_file):
+            print(f"Error: Compressed file not found: {compressed_file}")
+            return None, 0
+
+        print(f"Decoding from: {compressed_file}")
+
+        # Bytes to bits
+        def bytes_to_bits(byte_data, n_bits):
+            bits = []
+            for byte in byte_data:
+                bits.append(format(byte, '08b'))
+            bit_string = ''.join(bits)
+            return bit_string[:n_bits]
+
+        # Decode Key or Value from single file
+        def decode_from_stream(f, shape):
+            """Decode a sequence from file stream"""
+            # Read codebook
+            cb_len = struct.unpack('I', f.read(4))[0]
+            codebook_dict = pickle.loads(f.read(cb_len))
+
+            # Read encoded data
+            data_len = struct.unpack('I', f.read(4))[0]
+            encoded_bytes = f.read(data_len)
+
+            # Get bytes per chunk
+            chunk_bytes_list = codebook_dict.get('chunk_bytes', None)
+            n_chunks = codebook_dict['n_chunks']
+
+            if chunk_bytes_list is None:
+                print("ERROR: chunk_bytes not found in codebook!")
+                return None
+
+            # Decode in byte order (each chunk's byte count is precise)
+            all_decoded = []
+            byte_offset = 0
+
+            for chunk_idx in range(n_chunks):
+                # Get this chunk's codebook
+                cb = codebook_dict['codebooks'][chunk_idx]
+                huff = HuffmanCodec()
+                huff.set_codebook(cb)
+
+                # Get this chunk's precise byte count
+                n_bytes = chunk_bytes_list[chunk_idx]
+                chunk_bytes = encoded_bytes[byte_offset:byte_offset + n_bytes]
+                byte_offset += n_bytes
+
+                # Use original bit count to truncate (remove padding)
+                n_bits = codebook_dict['chunk_bits'][chunk_idx]
+                chunk_bits = bytes_to_bits(chunk_bytes, n_bits)
+
+                try:
+                    chunk_data = huff.decode(chunk_bits)
+                    all_decoded.extend(chunk_data)
+                except Exception as e:
+                    print(f"  ERROR at chunk {chunk_idx}: {e}")
+                    print(f"    n_bytes: {n_bytes}, chunk_bits length: {len(chunk_bits)}")
+                    raise
+
+            # Convert to tensor
+            all_decoded = torch.tensor(all_decoded, dtype=torch.int8)
+
+            first_sample = codebook_dict['first_sample']
+
+            # Ensure first_sample is on CPU
+            first_sample = first_sample.cpu()
+            all_decoded = all_decoded.cpu()
+
+            # Calculate n_samples from decoded data and first_sample
+            n_features = first_sample.numel()
+            n_samples = len(all_decoded) // n_features
+            decoded_array = delta_decode(all_decoded, first_sample, n_samples)
+
+            return decoded_array
+
+        with open(compressed_file, 'rb') as f:
+            # Read metadata
+            meta_len = struct.unpack('I', f.read(4))[0]
+            meta = pickle.loads(f.read(meta_len))
+
+            k_shape = meta['k_shape']
+            v_shape = meta['v_shape']
+            modified_sequence = meta['modified_sequence']
+            kv_shape = meta.get('kv_shape', None)
+
+            # Decode Key
+            print("Decoding keys...")
+            import gc
+            gc.collect()
+            k_decoded = decode_from_stream(f, k_shape)
+            gc.collect()
+
+            # Decode Value
+            print("Decoding values...")
+            gc.collect()
+            v_decoded = decode_from_stream(f, v_shape)
+            gc.collect()
+
+       # 1. Initialize target Tensor directly on GPU to avoid occupying host memory
+        kv_tensor = torch.zeros(kv_shape[0], kv_shape[1], kv_shape[2], kv_shape[3], kv_shape[4], dtype=torch.int8, device="cuda")
+
+        # 2. To avoid extremely high time cost of cross-device copying one by one in loop, first move k and v to GPU (assuming VRAM is sufficient for these 1D/2D arrays)
+        k_decoded = k_decoded.to("cuda")
+        v_decoded = v_decoded.to("cuda")
+
+        for idx, (layer, head, seq_pos) in enumerate(modified_sequence):
+            kv_tensor[layer, 0, head, seq_pos, :] = k_decoded[idx]
+            kv_tensor[layer, 1, head, seq_pos, :] = v_decoded[idx]
+
+        # 3. After data assembly is complete, source data is no longer needed, immediately release memory and clear cache
+        del k_decoded
+        del v_decoded
+        del modified_sequence
+
+        # Force trigger Python garbage collection and clear unallocated VRAM
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        # Load quantization parameters
+        bin_list = meta.get('bin_list', self.bin_list if hasattr(self, 'bin_list') else [28,24,24,20,20,18])
+        layer_group = meta.get('layer_group', self.layer_group if hasattr(self, 'layer_group') else 6)
+
+        # Read max_q directly from meta
+        max_q = meta.get('max_q', getattr(self, 'max_q', None))
+
+        # 4. Dequantization operation (input kv_tensor is already on GPU, output will also be on GPU)
+        if max_q is not None:
+            kv_dequant = layer_dequantize(kv_tensor, max_q, bin_list, layer_group)
+        else:
+            print("Error: max_q is required for dequantization")
+            kv_dequant = kv_tensor.float()
+
+        # 5. After dequantization, original int8 kv_tensor is no longer needed, continue to release
+        del kv_tensor
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        end_total = time.perf_counter()
+        decode_time = end_total - start_total
+
+        print(f"Decoding completed in {decode_time:.2f}s")
+
+        # Verify decoded result matches original self.kv_dequant
+        if hasattr(self, 'kv_dequant') and self.kv_dequant is not None:
+            print("\n" + "="*50)
+            print("Verifying decoded kv_dequant against self.kv_dequant...")
+            print("="*50)
+
+            # Ensure both tensors are on the same device
+            decoded = to_blob_cpu(kv_dequant)
+            original = to_blob_cpu(self.kv_dequant)
+
+
+            # Calculate difference
+            diff = torch.abs(original - decoded)
+            max_diff = diff.max().item()
+
+            # Check if exactly matching
+            if max_diff == 0:
+                print(f"\n  ✓ DECODED kv_dequant MATCHES self.kv_dequant PERFECTLY!")
+            else:
+                print(f"\n  ✗ WARNING: Decoded data differs from original!")
+                
+            print("="*50 + "\n")
+
+        return kv_dequant, decode_time
+   
