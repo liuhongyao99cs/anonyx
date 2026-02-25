@@ -23,6 +23,7 @@ p.add_argument("--dataset_name", type=str)
 p.add_argument("--start", type=int, default=0)
 p.add_argument("--end", type=int, default=1)
 p.add_argument("--save_dir", type=str)
+p.add_argument("--video_dir", type=str,default="")
 args = p.parse_args()
 
 model_name = args.model_id
@@ -39,14 +40,14 @@ if __name__ == "__main__":
 
     # Model configuration with 4-bit quantization for memory efficiency
     bnb_config = BitsAndBytesConfig(
-        # load_in_4bit=True,               # Enable 4-bit loading
-        # bnb_4bit_use_double_quant=True,   # Enable double quantization for further memory savings
-        # bnb_4bit_quant_type="nf4",       # Use NF4 format for minimal precision loss
+        load_in_4bit=True,               # Enable 4-bit loading
+        bnb_4bit_use_double_quant=True,   # Enable double quantization for further memory savings
+        bnb_4bit_quant_type="nf4",       # Use NF4 format for minimal precision loss
         bnb_4bit_compute_dtype=torch.bfloat16  # Compute dtype (recommend keeping bf16)
     )
 
     # Load model based on dataset type
-    if data_name in ['videomme']:
+    if data_name in ['videomme',"mvbench","vcgbench"]:
         # Video Language Model (VLM) for video understanding tasks
         model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_name,
@@ -87,8 +88,22 @@ if __name__ == "__main__":
             input_text = data[session_id]['context'] + "Summarize the given context in 250 tokens."
         elif data_name in ['videomme']:
             input_text = "Please answer the following multiple-choice question. Select the correct option (A, B, C, or D) and provide a brief explanation for your choice. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question']
+        elif data_name in ['mvbench']:
+            # Format candidates list as "A. xxx B. xxx C. xxx"
+            candidates = data[session_id]['candidates']
+            candidates_str = " ".join([f"{chr(65+i)}. {c}" for i, c in enumerate(candidates)])
+            input_text = "Role: You are a precise visual analysis expert. Task: Watch the video and answer the following multiple-choice question with one option in the candidates. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question'] + " " + candidates_str
+        elif data_name in ['vcgbench']:
+            # Skip if question is empty
+            if not data[session_id].get("Q") or data[session_id]["Q"] == "":
+                print(f"Sample {session_id} has empty question, skipping...")
+                continue
+
+            input_text = "Answer questions based on given video." + data[session_id]['Q'] 
 
         # Handle VLM and LLM tasks separately
+
+        # video-MME needs to fetch the video from the Youtube url
         if data_name in ['videomme']:
             # Download video from YouTube
             url = data[session_id]["url"]
@@ -135,6 +150,74 @@ if __name__ == "__main__":
             # Generate first token to initialize KV cache
             generated_ids = model.generate(**inputs, max_new_tokens=1, return_dict_in_generate=True)
 
+        # MVbench videos are stored in the disk
+        elif data_name in ['mvbench','vcgbench']:
+            if data_name in ['mvbench']:
+                video = Path(args.video_dir) / data[session_id]["video"]
+                frames = extract_frames(
+                    video_path=video,
+                    time_interval=0.1,
+                )
+
+                # Prepare messages for VLM with video content
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "video",
+                                "video": video,
+                                "max_pixels": 1600 * 1200,
+                                "fps": 10.0,  # Reduced FPS to minimize token count for demo
+                            },
+                            {"type": "text", "text": input_text},
+                        ],
+                    }
+                ]
+
+            elif data_name in ['vcgbench']:
+            
+                video = Path(args.video_dir) / data[session_id]["video_name"]
+
+                frames = extract_frames(
+                    video_path=video,
+                    time_interval=1,
+                )
+
+                # Prepare messages for VLM with video content
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "video",
+                                "video": video,
+                                "max_pixels": 420 * 280,
+                                "fps": 1.0,  # Reduced FPS to minimize token count for demo
+                            },
+                            {"type": "text", "text": input_text},
+                        ],
+                    }
+                ]
+
+            # Apply chat template and process inputs
+            text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = processor(
+                text=[text],
+                videos=[frames],
+                padding=True,
+                return_tensors="pt",
+            )
+
+            # Move inputs to the same device as the model (GPU)
+            inputs = inputs.to(model.device)
+            input_ids = inputs['input_ids']
+            attention_mask = inputs['attention_mask']
+
+            # Generate first token to initialize KV cache
+            generated_ids = model.generate(**inputs, max_new_tokens=1, return_dict_in_generate=True)
+
+
         else:
             # Standard LLM tokenization
             inputs_ids = tokenizer(input_text, return_tensors="pt").to(model.device)
@@ -168,9 +251,9 @@ if __name__ == "__main__":
             pickle.dump(kv, open(f"{args.save_dir}/raw_kv_{session_id}.pkl", "wb"))
 
         # VLM-specific: Generate response token-by-token using KV cache
-        if data_name in ['videomme']:
+        if data_name in ['videomme', 'mvbench','vcgbench']:
             kvx = kv_tensor
-            bin_list = [32, 28, 24, 24, 22, 22]
+            bin_list = [48,48,48,48,48,48]
             layer_group = 9
             kv_quant, max_q = layer_quantization(kvx, bin_list, layer_group)
             kv_dequant = layer_dequantize(kv_quant, max_q, bin_list, layer_group)
