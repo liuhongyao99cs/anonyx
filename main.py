@@ -270,9 +270,8 @@ if __name__ == "__main__":
 
         # chunk-level download and decode
         #success, result = cloud.download(f"{data_name}/compressed_{session_id}.bin", compressed_file)
-        encoder.decode_inflation_control_v1(session_id = session_id, compressed_file=compressed_file)
+        #encoder.decode_inflation_control_v1(session_id = session_id, compressed_file=compressed_file)
 
-        code_size = 315 / 15800 * seq_len 
         print(f"Code size of KV cache: {code_size:.2f}MB...")
         
         del kv_quant
