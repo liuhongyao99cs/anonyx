@@ -52,8 +52,7 @@ data_name = args.dataset_name
 #import os
 #os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
-login(token = "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")
-# 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
+login(token = "xxx")
 
 if __name__ == "__main__":
 
