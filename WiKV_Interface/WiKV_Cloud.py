@@ -42,7 +42,7 @@ class WiKV_Cloud:
     - Performance metrics collection
     """
 
-    def __init__(self, bucket_name: str = "kvcache", region: str = "xxx"):
+    def __init__(self, bucket_name: str = "kvcache", region: str = "cn-hongkong"):
         """
         Initialize WiKV Cloud client
 
