@@ -12,6 +12,7 @@ import concurrent.futures
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, Qwen2_5_VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
 
+import torchac_cuda
 from src import *
 from WiKV_Interface import WiKV_Controller, WiKV_Encode, WiKV_Cloud
 from huggingface_hub import login
@@ -52,7 +53,8 @@ data_name = args.dataset_name
 #import os
 #os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
-login(token = "xxx")
+login(token = "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")
+# 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
 
 if __name__ == "__main__":
 
@@ -259,19 +261,30 @@ if __name__ == "__main__":
         #semantic_seq, code_size, original_seq = encoder.Inflation_Control(session_id)
         
         # encode the KV cache
-        semantic_seq, code_size, original_seq,_, compressed_file = encoder.Inflation_Control_v1(
+        #semantic_seq, code_size, original_seq,_, compressed_file = encoder.Inflation_Control_v1(
+        #    session_id=session_id,
+        #)
+
+
+        code_size, semantic_seq, output_path = encoder.Inflation_Control_v2(
             session_id=session_id,
+            pickle_num = 20
         )
 
+
+        # Decode from binary file
+        # kv_decoded = encoder.Inflation_Decode_v2(output_path)
+
         # send to ali oss storage
-        cloud = WiKV_Cloud(bucket_name='kvcache')
+        #cloud = WiKV_Cloud(bucket_name='kvcache')
         #success, result = cloud.upload(compressed_file, f"{data_name}")
 
         # chunk-level download and decode
         #success, result = cloud.download(f"{data_name}/compressed_{session_id}.bin", compressed_file)
         #encoder.decode_inflation_control_v1(session_id = session_id, compressed_file=compressed_file)
 
-        print(f"Code size of KV cache: {code_size:.2f}MB...")
+        #code_size = 315 / 15800 * seq_len 
+        print(f"Code size of KV cache: {code_size:.2f} MB...")
         
         del kv_quant
         # Confidence check and pacing token decoding
@@ -283,7 +296,6 @@ if __name__ == "__main__":
         kv_dequant = to_blob_cpu(kv_dequant)
         kv_dequant = kv_dequant.squeeze(2)
         kv_dequant = kv_dequant.cpu()
-        print(kv_dequant.shape, semantic_seq.shape, original_seq.shape)
         
         # latency ddl for pace decoding
         ttft = 0
@@ -297,7 +309,7 @@ if __name__ == "__main__":
 
         # controller init
         controller.kv_pool_initialize(kv_dequant)
-        controller.start_kv_fill(semantic_seq=original_seq, bw_trace=[850,370,1360,450,1220,780,640,890,660,780,890,1000,850,670,960,950,1020,780,640,890.660,780,890,1000,680,1200,1350,660,450,1400.680,980,860,780,800,1200,450,340,1230], kv_gpu=kv_dequant, code_size=code_size)
+        controller.start_kv_fill(semantic_seq=semantic_seq, bw_trace=[850,370,1360,450,1220,780,640,890,660,780,890,1000,850,670,960,950,1020,780,640,890.660,780,890,1000,680,1200,1350,660,450,1400.680,980,860,780,800,1200,450,340,1230], kv_gpu=kv_dequant, code_size=code_size)
         
         # reponse format
         BOLD = '\033[1m'
