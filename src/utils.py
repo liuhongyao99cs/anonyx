@@ -4,6 +4,9 @@ import json
 import heapq
 import torch
 import pickle
+
+import torchac_cuda
+
 import yt_dlp
 from PIL import Image
 from typing import List, Optional
@@ -244,7 +247,6 @@ def delta_encode(tensor_2d):
     
     return flat_deltas, first_sample
 
-
 def delta_decode(flat_deltas, first_sample, n_samples):
     """
     Decode 1D delta-encoded data back to 2D tensor (PyTorch version)
@@ -279,6 +281,332 @@ def delta_decode(flat_deltas, first_sample, n_samples):
         original[1:] = torch.cumsum(deltas[1:], dim=0) + first_sample
     
     return original
+
+def delta_encode_2d(tensor_2d):
+    """
+    Delta encoding between kv vectors (PyTorch version)
+    
+    Args:
+        tensor_2d: 2D torch.Tensor of shape (n_samples, n_features)
+    
+    Returns:
+        flat_deltas: 1D torch.Tensor (flattened delta-encoded data)
+        first_sample: torch.Tensor, the first row of original tensor
+    """
+    # Ensure input is a tensor
+    if not isinstance(tensor_2d, torch.Tensor):
+        tensor_2d = torch.as_tensor(tensor_2d)
+    
+    if tensor_2d.dim() != 2:
+        raise ValueError("Input must be 2D tensor")
+    
+    n_samples, n_features = tensor_2d.shape
+    if n_samples == 0:
+        return torch.tensor([]).to(tensor_2d.dtype), torch.tensor([]).to(tensor_2d.dtype)
+    
+    # Create deltas tensor
+    deltas = torch.empty_like(tensor_2d)
+    deltas[0] = tensor_2d[0]
+    
+    if n_samples > 1:
+        deltas[1:] = tensor_2d[1:] - tensor_2d[:-1]
+    
+    first_sample = tensor_2d[0].clone()
+    
+    return deltas, first_sample
+
+def delta_decode_2d(deltas, first_sample):
+    """
+    Decode 2D delta-encoded data back to 2D tensor (PyTorch version)
+    
+    Args:
+        flat_deltas: 1D torch.Tensor
+        first_sample: torch.Tensor, shape (n_features,)
+        n_samples: int, number of original rows
+    
+    Returns:
+        original: 2D torch.Tensor of shape (n_samples, n_features)
+    """
+    
+    # Reconstruct original
+    original = torch.empty_like(deltas)
+    original[0] = first_sample
+    
+    original[1:] = torch.cumsum(deltas[1:], dim=0) + first_sample
+    
+    return original
+
+# ===================================
+# Arithmetic coding - cuda ( from CacheGen )
+# ===================================
+
+def collect_bytes(output_buffer, output_lengths):
+    output_buffer_size = output_buffer.shape[-1]
+    flattened_lengths = output_lengths.flatten()
+    flattened_buffer = output_buffer.flatten()
+    summed_length = (output_buffer_size - flattened_lengths).cumsum(0)
+    summed_length = summed_length.roll(1)
+    summed_length[0] = 0
+    indexes = summed_length.repeat_interleave(flattened_lengths)
+    indexes = indexes + torch.arange(len(indexes), device=indexes.device)
+    return flattened_buffer[indexes]
+
+
+def arithmetic_encode_with_cdf(symbols, cdf_int, num_bins):
+    """
+    Arithmetic Encoding with pre-computed CDF
+
+    Input:
+        symbols: int8 tensor, shape [nlayers_total, ntokens, nchannels]
+        cdf_int: pre-computed CDF tensor, shape [nlayers_total, nchannels, num_bins+1]
+        num_bins: number of bins (must be < 64, as MAX_LP=48)
+
+    Output:
+        Dictionary containing:
+            - bytestream: compressed byte stream
+            - cdf_int: CDF used for decoding (reference to input)
+            - output_lengths: encoded length for each channel
+            - ntokens: number of tokens
+            - nlayers_total: total number of layers
+            - nchannels: number of channels
+    """
+    symbols_int8 = symbols.to(torch.int8)
+    nlayers_total, ntokens, nchannels = symbols_int8.shape
+
+    # Allocate output buffers
+    output_buffer = torch.zeros(
+        (nlayers_total, nchannels, ntokens * 2),
+        dtype=torch.uint8,
+        device=symbols_int8.device
+    )
+    output_lengths = torch.zeros(
+        (nlayers_total, nchannels),
+        dtype=torch.int32,
+        device=symbols_int8.device
+    )
+
+    # Encoding with provided CDF
+    torchac_cuda.encode_fast_new(
+        cdf_int,
+        symbols_int8,
+        output_buffer,
+        output_lengths,
+    )
+
+    # Collect bytestream
+    bytestream = collect_bytes(output_buffer, output_lengths)
+
+    return {
+        'bytestream': bytestream,
+        'cdf_int': cdf_int,
+        'output_lengths': output_lengths,
+        'ntokens': ntokens,
+        'nlayers_total': nlayers_total,
+        'nchannels': nchannels,
+    }
+
+
+def arithmetic_encode(symbols, num_bins):
+    """
+    Arithmetic Encoding
+
+    Input:
+        symbols: int8 tensor, shape [nlayers_total, ntokens, nchannels]
+        num_bins: number of bins (must be < 64, as MAX_LP=48)
+
+    Output:
+        Dictionary containing:
+            - bytestream: compressed byte stream
+            - cdf_int: CDF used for decoding
+            - output_lengths: encoded length for each channel
+            - ntokens: number of tokens
+            - nlayers_total: total number of layers
+            - nchannels: number of channels
+    """
+    symbols_int8 = symbols.to(torch.int8)
+    nlayers_total, ntokens, nchannels = symbols_int8.shape
+
+    # Calculate CDF
+    cdf_int = torchac_cuda.calculate_cdf(symbols_int8, num_bins)
+
+    # Allocate output buffers
+    output_buffer = torch.zeros(
+        (nlayers_total, nchannels, ntokens * 2),
+        dtype=torch.uint8,
+        device=symbols_int8.device
+    )
+    output_lengths = torch.zeros(
+        (nlayers_total, nchannels),
+        dtype=torch.int32,
+        device=symbols_int8.device
+    )
+
+    # Encoding
+    torchac_cuda.encode_fast_new(
+        cdf_int,
+        symbols_int8,
+        output_buffer,
+        output_lengths,
+    )
+
+    # Collect bytestream
+    bytestream = collect_bytes(output_buffer, output_lengths)
+
+    return {
+        'bytestream': bytestream,
+        'cdf_int': cdf_int,
+        'output_lengths': output_lengths,
+        'ntokens': ntokens,
+        'nlayers_total': nlayers_total,
+        'nchannels': nchannels,
+    }
+
+
+def arithmetic_decode(encoded_data):
+    """
+    Arithmetic Decoding
+
+    Input:
+        encoded_data: dictionary returned by the encoding function
+
+    Output:
+        decoded_symbols: decoded int8 tensor [nlayers_total, ntokens, nchannels]
+    """
+    bytestream = encoded_data['bytestream']
+    cdf_int = encoded_data['cdf_int']
+    output_lengths = encoded_data['output_lengths']
+    ntokens = encoded_data['ntokens']
+    nlayers_total = encoded_data['nlayers_total']
+    nchannels = encoded_data['nchannels']
+
+    # Create decoding output buffer
+    decode_output = torch.zeros(
+        (nlayers_total, ntokens, nchannels),
+        dtype=torch.uint8,
+        device=bytestream.device
+    )
+
+    # Decoding using prefix sum method
+    length_prefsum = output_lengths.flatten().cumsum(0).reshape(output_lengths.shape)
+
+    torchac_cuda.decode_fast_prefsum(
+        cdf_int,
+        bytestream,
+        length_prefsum,
+        decode_output
+    )
+
+    return decode_output
+
+
+# ============================================================================
+# Chunked Encoding/Decoding (Suitable for cases with >256 tokens)
+# ============================================================================
+
+def arithmetic_encode_chunk(symbols, num_bins, max_tokens_per_chunk=256, use_global_cdf=False):
+    """
+    Chunked Arithmetic Encoding (Suitable for large number of tokens)
+
+    Input:
+        symbols: int8 tensor, shape [nlayers_total, ntokens, nchannels]
+        num_bins: number of bins
+        max_tokens_per_chunk: maximum tokens per chunk (default: 256)
+        use_global_cdf: if True, compute CDF on entire data and share across chunks
+
+    Output:
+        If use_global_cdf=True:
+            (encoded_chunks, global_cdf) - chunks don't contain cdf_int
+        If use_global_cdf=False:
+            encoded_chunks - each chunk contains its own cdf_int
+    """
+    nlayers_total, ntokens, nchannels = symbols.shape
+
+    # Compute global CDF if requested
+    global_cdf = None
+    if use_global_cdf:
+        global_cdf = torchac_cuda.calculate_cdf(symbols, num_bins)
+
+    chunks = []
+    for start in range(0, ntokens, max_tokens_per_chunk):
+        end = min(start + max_tokens_per_chunk, ntokens)
+        chunk_symbols = symbols[:, start:end, :]
+
+        # Encode with shared or individual CDF
+        if use_global_cdf:
+            chunk_result = arithmetic_encode_with_cdf(chunk_symbols, global_cdf, num_bins)
+        else:
+            chunk_result = arithmetic_encode(chunk_symbols, num_bins)
+
+        chunks.append({
+            'bytestream': chunk_result['bytestream'],
+            'output_lengths': chunk_result['output_lengths'],
+            'ntokens': end - start,
+        })
+
+    if use_global_cdf:
+        return chunks, global_cdf
+    return chunks
+
+
+def arithmetic_decode_chunk(encoded_chunks, global_cdf=None):
+    """
+    Chunked Arithmetic Decoding
+
+    Input:
+        encoded_chunks: list of chunks returned by the encoding function
+        global_cdf: if provided, use this CDF for all chunks (for use_global_cdf=True)
+
+    Output:
+        decoded_symbols: decoded int8 tensor
+    """
+    # Get CDF for dimension info
+    if global_cdf is not None:
+        cdf_for_dims = global_cdf
+    else:
+        # Backward compatibility: get from first chunk
+        cdf_for_dims = encoded_chunks[0]['cdf_int']
+
+    nlayers_total = cdf_for_dims.shape[0]
+    nchannels = cdf_for_dims.shape[1]
+    device = encoded_chunks[0]['bytestream'].device
+
+    # Calculate total number of tokens
+    ntokens_total = sum(chunk['ntokens'] for chunk in encoded_chunks)
+    decode_output = torch.zeros(
+        (nlayers_total, ntokens_total, nchannels),
+        dtype=torch.uint8,
+        device=device
+    )
+
+    offset = 0
+    for chunk in encoded_chunks:
+        ntokens = chunk['ntokens']
+
+        # Create decoding buffer
+        chunk_decode = torch.zeros(
+            (nlayers_total, ntokens, nchannels),
+            dtype=torch.uint8,
+            device=device
+        )
+
+        # Decoding with global CDF or chunk-specific CDF
+        cdf_int = global_cdf if global_cdf is not None else chunk['cdf_int']
+
+        length_prefsum = chunk['output_lengths'].flatten().cumsum(0).reshape(chunk['output_lengths'].shape)
+        torchac_cuda.decode_fast_prefsum(
+            cdf_int,
+            chunk['bytestream'],
+            length_prefsum,
+            chunk_decode
+        )
+
+        # Copy to the corresponding position
+        decode_output[:, offset:offset+ntokens, :] = chunk_decode
+        offset += ntokens
+
+    return decode_output
+
+
 
 # ===================================
 # Huffman ecoding 
