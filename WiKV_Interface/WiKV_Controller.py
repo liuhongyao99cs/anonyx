@@ -5,6 +5,7 @@ import math
 import copy
 import torch
 import threading
+from queue import Queue
 from collections import Counter
 import numpy as np
 from pathlib import Path
@@ -45,6 +46,9 @@ class WiKV_Controller:
         self.think_st = threading.Event()
         self.think_end = threading.Event()
 
+        self.download_done_event = threading.Event()
+        self.download_queue = Queue()
+
     def kv_pool_initialize(self, kv):
         # cpu kv pool to handle the streaming data
 
@@ -65,6 +69,81 @@ class WiKV_Controller:
             daemon=True
         )
         self.fill_thread.start()
+
+    # this function dowload file from aliyun cloud
+    def download_worker(self, cloud, file_num, download_path, data_name, session_id):
+
+        # wait for the warm-up finish
+        self.warm_up.wait()
+
+        download_times = []
+        total_start = time.time()
+
+        for k in range(file_num):
+            start_time = time.time()
+            down_path = f"{download_path}kv_code_{session_id}_seg_{k}.bin"
+            remote_path = f"{data_name}/doc_{session_id}/kv_code_{session_id}_seg_{k}.bin"
+            success, msg = cloud.download(remote_path, down_path)
+            elapsed = time.time() - start_time
+
+            if success:
+                download_times.append(elapsed)
+                self.download_queue.put(k)
+                #print(f"Downloaded chunk {k}: {elapsed:.3f}s")
+            else:
+                print(f"Failed to download chunk {k}: {msg}")
+
+        total_time = time.time() - total_start
+        '''
+        print(f"\n{'='*50}")
+        print(f"Download Summary:")
+        print(f"  Total files: {file_num}")
+        print(f"  Downloaded: {len(download_times)}")
+        print(f"  Total time: {total_time:.3f}s")
+        if download_times:
+            print(f"  Avg per chunk: {sum(download_times)/len(download_times):.3f}s")
+            print(f"  Min: {min(download_times):.3f}s, Max: {max(download_times):.3f}s")
+        print(f"{'='*50}\n")
+        '''
+        self.download_done_event.set()
+
+    def decode_worker(self, encoder, kv_decoded, file_num, output_dir, session_id):
+        decode_times = []
+        next_k = 0  
+        
+        while next_k < file_num or not self.download_done_event.is_set():
+            try:
+                k = self.download_queue.get(timeout=30)  # 等待下载完成信号
+                
+                if k == next_k:  
+                    start_time = time.time()
+                    kv_decoded = encoder.Inflation_Decode_v2(kv_decoded, output_dir, session_id, k)
+
+                    with self.lock:
+                        self.kv_pool = kv_decoded.clone()
+                        if k / file_num >= self.threshold:
+                            self.threshold += self.step
+                            self.ready_event.set()
+
+                    torch.cuda.synchronize()
+                    elapsed = time.time() - start_time
+                    decode_times.append(elapsed)
+                    #print(f"Decode chunk {k}: {elapsed:.3f}s")
+                    next_k += 1
+                else:
+                    self.download_queue.put(k)
+            except:
+                continue
+
+        with self.lock:
+            self.threshold = 1
+            self.full_event.set()
+            self.ready_event.set()
+            
+        total = sum(decode_times)
+        #print(f"Total: {total:.3f}s, Avg: {total/10:.3f}s")
+        
+
 
     def _fill_worker(self, semantic_seq, bw_trace, kv_gpu, code_size):
 
@@ -800,6 +879,7 @@ class WiKV_Controller:
                         #print(f"Prepare {self.threshold*100}% KV CACHE for token {k}: {elapsed_time:.4f}s")
                         #del kv_pace
                         start = time.perf_counter()
+                        #kv_tuple, _ = self.probe(kv_tuple, target_device='cuda:0')
                         kv_tmp = copy.deepcopy(kv_tuple)
                         with torch.no_grad():
                             generated = model.generate(
@@ -885,6 +965,14 @@ class WiKV_Controller:
                     kv_tuple = generated['past_key_values']
                     token = tokenizer.decode(generated.sequences[0][-1], skip_special_tokens=True)
                     #token = token[-1]
+                    if k == 0:
+                        self.think_end.is_set()
+                        self.think_st.clear()
+                        print(f"{RESET}\n")
+                        print(f"{RESET}WiKV answer: ")
+                        end = time.perf_counter()
+                        ttft = end - token_st
+                        
                     print(f"{BOLD}{BRIGHT_WHITE}{UNDERLINE}{TALIC}{token}", end="", flush=True)
                     del generated
             

@@ -59,10 +59,10 @@ class WiKV_Encode:
         self.window_size = window_size
         self.device = device  # Save device
         # VLM
-        #self.bin_list = [64,64,64,64,64,64]
+        #self.bin_list = [46,46,46,46,46,46,46]
         #self.bin_list = [32,32,28,24,24,20,16]
         # LLM
-        self.bin_list = [28,28,24,22,20,18]
+        self.bin_list = [28,28,26,22,20,16]
         self.layer_group = 6
         self.batch_size = 20000
         self.max_deviation = 10000
@@ -1144,6 +1144,7 @@ class WiKV_Encode:
         n_head  = kv.shape[2]
         n_token = kv.shape[3]
         n_hidden = kv.shape[4]
+        seq_len = n_token * n_layer * n_head
         # =========================================================================
         # Step 1: Load inflation control sequence
         # =========================================================================
@@ -1167,102 +1168,128 @@ class WiKV_Encode:
         modified_sequence = self.sorted_sequence[modify_seq]
 
         # we encode the KV cache file into Pickle number files
-        modified_sequence_seg = torch.chunk(modified_sequence, pickle_num, dim=0)
-
-        #for i, seg in enumerate(modified_sequence_seg):
-
-        # Extract reordered Key and Value, progressive decoding
-        kv_seq = kv[modified_sequence[:, 0], :, modified_sequence[:, 1], modified_sequence[:, 2], :]
+        segments = torch.chunk(kv, pickle_num, dim=3)
+        idx = 0
+        encoded_bytes = 0
+        self.kv_dequant = []
+        #kv_seq = kv[modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 0], :, modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 1], modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 2], :]
         #temp = kv_seq.view(n_layer, n_head, n_token, 2, n_hidden)
         #kv_seq = temp.permute(0, 3, 1, 2, 4).contiguous()
-        k_seq = kv_seq[:,0,:].squeeze(1) #kv_seq[modified_sequence[:, 0], 0, modified_sequence[:, 1], modified_sequence[:, 2], :]
-        v_seq = kv_seq[:,1,:].squeeze(1)#kv_seq[modified_sequence[:, 0], 1, modified_sequence[:, 1], modified_sequence[:, 2], :]
+
+        for i, seg in enumerate(segments):
+
+            
+            # Get current segment's token count FIRST
+            n_token = seg.shape[3]
+
+            # Extract reordered Key and Value, progressive decoding
+            
+            k_seq = kv[modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 0], 0, modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 1], modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 2], :]
+            v_seq = kv[modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 0], 1, modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 1], modified_sequence[idx:min(idx+n_token*n_head*n_layer,seq_len), 2], :]
+
+            idx += n_token*n_head*n_layer
+
+            # quantize -> [n_layer,2,n_head,n_token,n_hidden]
+            temp_key = k_seq.view(n_layer, n_head, n_token, n_hidden)
+            temp_val = v_seq.view(n_layer, n_head, n_token, n_hidden)
+            combined = torch.stack([temp_key, temp_val], dim=1)
+            kv_quant, max_q = layer_quantization(combined, self.bin_list, self.layer_group)
+            self.kv_dequant.append(layer_dequantize(kv_quant, max_q, self.bin_list, self.layer_group))
+
+
+            # delta encoding: delta size -> [n_layer * n_token*n_head, n_hidden]
+            #key_code = kv_quant[:,0,:,:,:]
+            #val_code = kv_quant[:,1,:,:,:]
+            #k_seq = key_code.reshape(n_layer * n_head * n_token, n_hidden)
+            #v_seq = val_code.reshape(n_layer * n_head * n_token, n_hidden)
+
+            #key_delta, key_first = delta_encode_2d(k_seq)
+            #temp_key = key_delta.view(n_layer, n_head, n_token, n_hidden)
+            #val_delta, val_first = delta_encode_2d(v_seq)
+            #temp_val = val_delta.view(n_layer, n_head, n_token, n_hidden)
+            #combined = torch.stack([temp_key, temp_val], dim=1)
+
+            
+            # Arithmetic coding, input -> [n_layer, n_token, n_head * n_hidden]
+            # input key/value -> uint8 instead int8
+            key_code = kv_quant[:,0,:,:,:]
+            val_code = kv_quant[:,1,:,:,:]
+
+            tmp = key_code.permute(0, 2, 1, 3).contiguous()
+            key_code = tmp.view(n_layer, n_token, -1)
+            tmp = val_code.permute(0, 2, 1, 3).contiguous()
+            val_code = tmp.view(n_layer, n_token, -1)
         
-        temp = kv_seq.view(n_layer, n_head, n_token, 2, n_hidden)
-        kv_seq = temp.permute(0, 3, 1, 2, 4).contiguous()
-
-        # delta encoding: delta size -> [n_layer * n_token*n_head, n_hidden]
-        key_delta, key_first = delta_encode_2d(k_seq)
-        temp_key = key_delta.view(n_layer, n_head, n_token, n_hidden)
-        val_delta, val_first = delta_encode_2d(v_seq)
-        temp_val = val_delta.view(n_layer, n_head, n_token, n_hidden)
-        combined = torch.stack([temp_key, temp_val], dim=1)
-
-        # quantize -> [n_layer,2,n_head,n_token,n_hidden]
-        kv_quant, max_q = layer_quantization(kv_seq, self.bin_list, self.layer_group)
-        self.kv_dequant = layer_dequantize(kv_quant, max_q, self.bin_list, self.layer_group)
+            key_code += self.bin_list[0]//2 + 1
+            val_code += self.bin_list[0]//2 + 1
+            key_code = key_code.to(torch.int8)
+            val_code = val_code.to(torch.int8)
+            #print(key_code.max(),key_code.min())
         
-        # Arithmetic coding, input -> [n_layer, n_token, n_head * n_hidden]
-        # input key/value -> uint8 instead int8
-        key_code = kv_quant[:,0,:,:,:]
-        val_code = kv_quant[:,1,:,:,:]
-        tmp = key_code.permute(0, 2, 1, 3).contiguous()
-        key_code = tmp.view(n_layer, n_token, -1)
-        tmp = val_code.permute(0, 2, 1, 3).contiguous()
-        val_code = tmp.view(n_layer, n_token, -1)
-      
-        key_code += self.bin_list[0]//2 + 1
-        val_code += self.bin_list[0]//2 + 1
-        key_code = key_code.to(torch.int8)
-        val_code = val_code.to(torch.int8)
-        print(key_code.max(),key_code.min())
-       
-        torch.cuda.synchronize()
-        key_encoded, key_cdf = arithmetic_encode_chunk(key_code, self.bin_list[0]+1, use_global_cdf=True)
-        val_encoded, val_cdf = arithmetic_encode_chunk(val_code, self.bin_list[0]+1, use_global_cdf=True)
+            torch.cuda.synchronize()
+            key_encoded, key_cdf = arithmetic_encode_chunk(key_code, self.bin_list[0]+1, use_global_cdf=True)
+            val_encoded, val_cdf = arithmetic_encode_chunk(val_code, self.bin_list[0]+1, use_global_cdf=True)
 
-        encoded_bytes = 0
-        encoded_bytes += sum(
-            chunk['bytestream'].numel() * chunk['bytestream'].element_size()
-            for chunk in key_encoded
-        )
-        encoded_bytes += sum(
-            chunk['bytestream'].numel() * chunk['bytestream'].element_size()
-            for chunk in val_encoded
-        )
-        # Add CDF size (only 2 CDFs instead of 2*num_chunks)
-        encoded_bytes += key_cdf.numel() * key_cdf.element_size()
-        encoded_bytes += val_cdf.numel() * val_cdf.element_size()
+            
+            encoded_bytes += sum(
+                chunk['bytestream'].numel() * chunk['bytestream'].element_size()
+                for chunk in key_encoded
+            )
+            encoded_bytes += sum(
+                chunk['bytestream'].numel() * chunk['bytestream'].element_size()
+                for chunk in val_encoded
+            )
+            # Add CDF size (only 2 CDFs instead of 2*num_chunks)
+            encoded_bytes += key_cdf.numel() * key_cdf.element_size()
+            encoded_bytes += val_cdf.numel() * val_cdf.element_size()
 
-        print(f"Encoded KV size: {encoded_bytes / 1024 / 1024:.2f} MB")
+            #print(f"Encoded KV size: {encoded_bytes / 1024 / 1024:.2f} MB")
 
-        # Save to binary file
-        output_dir = f"{self.args.save_encode_dir}Arithmetic_v2"
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = f"{output_dir}/kv_code_{session_id}.bin"
+            # Save to binary file
+            output_dir = f"{self.args.save_encode_dir}Arithmetic_v2"
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = f"{output_dir}/kv_code_{session_id}_seg_{i}.bin"
 
-        # Pack all encode data into a dictionary
-        # Now chunks don't contain cdf_int, we store shared CDFs separately
-        # Compress modified_sequence to int32 to save space (was int64)
-        encode_data = {
-            'key_encoded': key_encoded,
-            'val_encoded': val_encoded,
-            'key_cdf': key_cdf,  # Shared CDF for all key chunks
-            'val_cdf': val_cdf,  # Shared CDF for all value chunks
-            'max_q': max_q,
-            'key_first': key_first,
-            'val_first': val_first,
-            'modified_sequence': modified_sequence.to(torch.int16),  # Compress: int64 -> int32
-            'n_layer': n_layer,
-            'n_head': n_head,
-            'n_token': n_token,
-            'n_hidden': n_hidden,
-        }
+            # Pack all encode data into a dictionary
+            # Now chunks don't contain cdf_int, we store shared CDFs separately
+            # Compress modified_sequence to int32 to save space (was int64)
+            encode_data = {
+                'key_encoded': key_encoded,
+                'val_encoded': val_encoded,
+                'key_cdf': key_cdf,  # Shared CDF for all key chunks
+                'val_cdf': val_cdf,  # Shared CDF for all value chunks
+                'max_q': max_q,
+                #'key_first': key_first,
+                #'val_first': val_first,
+                'modified_sequence': modified_sequence[idx-n_token*n_head*n_layer:idx,:].to(torch.int16),  # Use idx - size to get current segment
+                # DEBUG
+                'debug_modified_seq_len': n_token*n_head*n_layer,
+                'debug_modified_seq_total': modified_sequence.shape[0],
+                'debug_idx': idx,
+                'debug_idx_minus': idx - n_token*n_head*n_layer,
+                'n_layer': n_layer,
+                'n_head': n_head,
+                'n_token': n_token,
+                'n_hidden': n_hidden,
+            }
 
-        # Save using pickle
-        with open(output_path, 'wb') as f:
-            pickle.dump(encode_data, f)
+            #print(f"DEBUG ENCODE: Saving segment {i}, modified_sequence slice: idx={idx}, len={n_token*n_head*n_layer}, total_modified_seq={modified_sequence.shape[0]}")
 
-        print(f"Saved encode data to: {output_path}")
-        return encoded_bytes/1024/1024, modified_sequence, output_path
+            # Save using pickle
+            with open(output_path, 'wb') as f:
+                pickle.dump(encode_data, f)
 
-    def Inflation_Decode_v2(self, encode_file_path):
+            #print(f"Saved encode data to: {output_path}")
+        # Return directory path instead of single file path for multi-segment encoding
+        return encoded_bytes/1024/1024, modified_sequence, output_dir, pickle_num
+
+    def Inflation_Decode_v2(self, kv_decoded, encode_file_path, session_id,id):
         """
         Decode function v2
         Input: encode_file_path (the output path from Inflation_Control_v2)
         """
         # Load encode data from binary file
-        with open(encode_file_path, 'rb') as f:
+        with open(f"{encode_file_path}/kv_code_{session_id}_seg_{id}.bin", 'rb') as f:
             encode_data = pickle.load(f)
 
         key_encoded = encode_data['key_encoded']
@@ -1271,8 +1298,8 @@ class WiKV_Encode:
         key_cdf = encode_data.get('key_cdf', None)
         val_cdf = encode_data.get('val_cdf', None)
         max_q = encode_data['max_q']
-        key_first = encode_data['key_first']
-        val_first = encode_data['val_first']
+        #key_first = encode_data['key_first']
+        #val_first = encode_data['val_first']
         modified_sequence = encode_data['modified_sequence']
         n_layer = encode_data['n_layer']
         n_head = encode_data['n_head']
@@ -1287,7 +1314,9 @@ class WiKV_Encode:
         # =========================================================================
         key_decoded = arithmetic_decode_chunk(key_encoded, global_cdf=key_cdf)
         val_decoded = arithmetic_decode_chunk(val_encoded, global_cdf=val_cdf)
-        
+
+        torch.cuda.synchronize()
+
         # =========================================================================
         # Step 2: Reverse offset (int8 -> uint8)
         # output size is: [n_layer, n_token, n_head * n_hidden]
@@ -1307,6 +1336,7 @@ class WiKV_Encode:
         # Permute: [n_layer, n_token, n_head, n_hidden] -> [n_layer, n_head, n_token, n_hidden]
         key_tensor = key_tensor.permute(0, 2, 1, 3).contiguous()
         val_tensor = val_tensor.permute(0, 2, 1, 3).contiguous()
+
         
         # =========================================================================
         # Step 4: Dequantize
@@ -1314,54 +1344,46 @@ class WiKV_Encode:
         # 合并 key 和 value: [n_layer, 2, n_head, n_token, n_hidden]
         kv_tensor = torch.stack([key_tensor, val_tensor], dim=1)
         kv_dequant = layer_dequantize(kv_tensor, max_q, bin_list, layer_group)
-        decoded = to_blob_cpu(kv_dequant)
+        #decoded = to_blob_cpu(kv_dequant)
         
         # =========================================================================
         # Step 5: Reverse delta encoding
         # =========================================================================
         # kv_dequant shape: [n_layer, 2, n_head, n_token, n_hidden]
-        kv_dequant = to_blob_cpu(kv_dequant)
+        kv_dequant = to_blob(kv_dequant)
         key_dequant = kv_dequant[:, 0, :, :, :].squeeze(1)  # [n_layer, n_head, n_token, n_hidden]
         val_dequant = kv_dequant[:, 1, :, :, :].squeeze(1)
 
-        print(key_dequant.shape)
-
         kv_dequant = torch.stack([key_dequant,val_dequant],dim=1)
         
-        original = to_blob_cpu(self.kv_dequant)
+        #original = to_blob_cpu(self.kv_dequant[id])
 
         # Calculate difference
-        diff = torch.abs(original - decoded)
-        max_diff = diff.max().item()
+        #diff = torch.abs(original - decoded)
+        #max_diff = diff.max().item()
 
         # Check if exactly matching
-        if max_diff == 0:
-            print(f"\n  ✓ DECODED kv_dequant MATCHES self.kv_dequant PERFECTLY!")
-        else:
-            print(f"\n  ✗ WARNING: Decoded data differs from original!")
+        #if max_diff == 0:
+        #    print(f"\n  ✓ DECODED kv_dequant MATCHES self.kv_dequant PERFECTLY!")
+        #else:
+        #    print(f"\n  ✗ WARNING: Decoded data differs from original!")
     
         # View to [n_layer * n_head * n_token, n_hidden]
         key_dequant = key_dequant.reshape(-1, n_hidden).cuda()
         val_dequant = val_dequant.reshape(-1, n_hidden).cuda()
         
         # Delta decode
-        key_decoded = delta_decode_2d(key_dequant, key_first.cuda())
-        val_decoded = delta_decode_2d(val_dequant, val_first.cuda())
+        #key_decoded = delta_decode_2d(key_dequant, key_first.cuda())
+        #val_decoded = delta_decode_2d(val_dequant, val_first.cuda())
         
 
         # reorder the data
         # 1. Initialize target Tensor directly on GPU to avoid occupying host memory
-        kv_tensor = torch.zeros(n_layer, 2, n_head, n_token, n_hidden, dtype=torch.int8, device="cuda")
+        #kv_tensor = torch.zeros(n_layer, 2, n_head, n_token, n_hidden, dtype=torch.int8, device="cuda")
         # 2. reorder
         #for idx, (layer, head, seq_pos) in enumerate(modified_sequence):
         #    kv_tensor[layer, 0, head, seq_pos, :] = key_decoded[idx,:]
         #    kv_tensor[layer, 1, head, seq_pos, :] = val_decoded[idx,:]
-
-        original_kv = torch.zeros(
-            (n_layer, 2, n_head, n_token, n_hidden),
-            dtype=key_decoded.dtype,
-            device=key_decoded.device
-        )
 
         # 
         layer_idx = modified_sequence[:, 0].long().cuda()
@@ -1369,9 +1391,9 @@ class WiKV_Encode:
         seq_idx = modified_sequence[:, 2].long().cuda()
 
         # 
-        original_kv[layer_idx, 0, head_idx, seq_idx, :] = key_decoded
-        original_kv[layer_idx, 1, head_idx, seq_idx, :] = val_decoded
+        kv_decoded[layer_idx, 0, head_idx, seq_idx, :] = key_dequant
+        kv_decoded[layer_idx, 1, head_idx, seq_idx, :] = val_dequant
 
-        return kv_tensor
+        #print("decode finish...")
 
-    
+        return kv_decoded
