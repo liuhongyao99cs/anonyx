@@ -27,7 +27,8 @@ export SAVE_ATT_DIR=/home/hongyao/data/Attention
 export SAVE_KV_DIR=/home/hongyao/data/KV_cache
 export SAVE_ENCODE_DIR=/home/hongyao/data/Encode
 
-
+# This is for local storage file path of video
+export VIDEO_DIR=/home/hongyao/data1
 
 export dataname=nqa
 python3 main.py \
@@ -40,10 +41,14 @@ python3 main.py \
     --save_hid_dir ${SAVE_HID_DIR}/${MODEL}/${dataname}/ \
     --save_att_dir ${SAVE_ATT_DIR}/${MODEL}/${dataname}/ \
     --save_encode_dir ${SAVE_ENCODE_DIR}/${MODEL}/${dataname}/ \
-    --start  9 \
+    --end_2_end 1\
+    --video_dir ${VIDEO_DIR}/${dataname}/ \
+    --start 9 \
     --end 10 \
 
 : <<'COMMENT'
+
+
 export dataname=nqa
 python3 main.py \
     --model_id $MODEL_ID \
