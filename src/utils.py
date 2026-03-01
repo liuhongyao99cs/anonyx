@@ -4,7 +4,7 @@ import json
 import heapq
 import torch
 import pickle
-
+from pathlib import Path
 import torchac_cuda
 
 import yt_dlp
@@ -159,6 +159,78 @@ def extract_frames(
     
 
     return pil_images
+
+def prepare_inputs(data_name, data, session_id, model, processor, tokenizer, args, dataset):
+    """
+    Prepare inputs for different datasets and modalities.
+
+    Returns:
+        Tuple: (input_ids, attention_mask, inputs, tokenizer, flag)
+        Returns (None, None, None, None, None) if sample should be skipped.
+    """
+    # Construct input text based on dataset type
+    if data_name in ['longchat', 'tqa', 'nqa']:
+        input_text = data[session_id]['prompt']
+    elif data_name in ['hotpotqa']:
+        input_text = data[session_id]['context'] + "Based on given passages, answer the question: " + data[session_id]['input']
+    elif data_name in ['gov_report']:
+        input_text = data[session_id]['context'] + "Summarize the given context in 250 tokens."
+    elif data_name in ['videomme']:
+        input_text = "Please answer the following multiple-choice question. Select the correct option (A, B, C, or D) and provide a brief explanation for your choice. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question']
+    elif data_name in ['mvbench']:
+        candidates = data[session_id]['candidates']
+        candidates_str = " ".join([f"{chr(65+i)}. {c}" for i, c in enumerate(candidates)])
+        input_text = "Role: You are a precise visual analysis expert. Task: Watch the video and answer the following multiple-choice question with one option in the candidates. Format your response as: Answer: [Option] Explanation: [Your reasoning]" + data[session_id]['question'] + " " + candidates_str
+    elif data_name in ['vcgbench']:
+        if not data[session_id].get("Q") or data[session_id]["Q"] == "":
+            print(f"Sample {session_id} has empty question, skipping...")
+            return None, None, None, None, None
+        input_text = "Answer questions based on given video." + data[session_id]['Q']
+    else:
+        input_text = ""
+
+    # Prepare inputs based on modality
+    if data_name in ['videomme']:
+        video_path = Path(dataset).parent
+        video = video_path / f"{session_id}.mp4"
+        frames = extract_frames(video_path=video, time_interval=0.5)
+
+        messages = [
+            {"role": "user", "content": [
+                {"type": "video", "video": video, "max_pixels": 360 * 420, "fps": 2.0},
+                {"type": "text", "text": input_text},
+            ]}
+        ]
+        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = processor(text=[text], videos=[frames], padding=True, return_tensors="pt")
+        inputs = inputs.to(model.device)
+        return inputs['input_ids'], inputs['attention_mask'], inputs, processor, 'VLM'
+
+    elif data_name in ['mvbench', 'vcgbench']:
+        if data_name in ['mvbench']:
+            video = Path(args.video_dir) / data[session_id]["video"]
+            frames = extract_frames(video_path=video, time_interval=0.1)
+            max_pixels, fps = 1600 * 1200, 10.0
+        else:
+            video = Path(args.video_dir) / data[session_id]["video_name"]
+            frames = extract_frames(video_path=video, time_interval=1)
+            max_pixels, fps = 420 * 280, 1.0
+
+        messages = [
+            {"role": "user", "content": [
+                {"type": "video", "video": video, "max_pixels": max_pixels, "fps": fps},
+                {"type": "text", "text": input_text},
+            ]}
+        ]
+        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = processor(text=[text], videos=[frames], padding=True, return_tensors="pt")
+        inputs = inputs.to(model.device)
+        return inputs['input_ids'], inputs['attention_mask'], inputs, processor, 'VLM'
+
+    else:
+        inputs_ids = tokenizer(input_text, return_tensors="pt").to(model.device)
+        return inputs_ids['input_ids'], inputs_ids['attention_mask'], None, tokenizer, 'LLM'
+    
 # ====================================
 # KV cache load in tensor, transfer to tuple for inference
 # ===================================
@@ -318,23 +390,17 @@ def delta_encode_2d(tensor_2d):
 def delta_decode_2d(deltas, first_sample):
     """
     Decode 2D delta-encoded data back to 2D tensor (PyTorch version)
-    
+
     Args:
         flat_deltas: 1D torch.Tensor
         first_sample: torch.Tensor, shape (n_features,)
         n_samples: int, number of original rows
-    
+
     Returns:
         original: 2D torch.Tensor of shape (n_samples, n_features)
     """
-    
-    # Reconstruct original
-    original = torch.empty_like(deltas)
-    original[0] = first_sample
-    
-    original[1:] = torch.cumsum(deltas[1:], dim=0) + first_sample
-    
-    return original
+    # Prepend first_sample, then cumsum - avoids intermediate tensor allocation
+    return torch.cat([first_sample.unsqueeze(0), deltas[1:]], dim=0).cumsum(dim=0)
 
 # ===================================
 # Arithmetic coding - cuda ( from CacheGen )
@@ -1499,3 +1565,17 @@ def probe_task(kv_pace, kv_tuple, input_idx, attention_maskx, controller, model,
             print(token, end="", flush=True)
             #print(f"Decoded token_num: {len(decode_token)}")
 '''
+
+'''
+        decode_times = []
+        for k in range(file_num):
+            start_time = time.time()
+            kv_decoded = encoder.Inflation_Decode_v2(kv_decoded,output_dir,session_id,k)
+            torch.cuda.synchronize()
+            elapsed = time.time() - start_time
+            decode_times.append(elapsed)
+            print(f"Decode chunk {k}: {elapsed:.3f}s")
+        total_decode_time = sum(decode_times)
+        print(f"Total decode time: {total_decode_time:.3f}s, Avg: {total_decode_time/10:.3f}s")
+        torch.cuda.synchronize()
+        '''
