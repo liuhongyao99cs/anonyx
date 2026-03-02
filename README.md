@@ -5,6 +5,18 @@
   <img src="https://img.shields.io/badge/Platform-Mobile%20%7C%20IoT-green?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
 </p>
+
+---
+## 📖 Overview
+
+WiKV is a novel framework that enables efficient inference of on-device Large Language Models (LLMs) through:
+
+- 🔄 **Progressive KV Streaming** — Overlaps wireless KV cache transmission with decoding
+- ⏱️ **Pace Decoding** — Optimizes token generation timing
+- 📉 **Significantly Reduced Latency** — Lower TTFT and overall inference time
+
+Designed for **mobile and IoT devices** while maintaining response quality.
+
 ---
 
 ## 📊 Inference Comparison
