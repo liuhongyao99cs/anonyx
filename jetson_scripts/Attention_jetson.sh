@@ -16,7 +16,7 @@ sudo docker run -it --rm \
     export SAVE_HID_DIR=/dataspace/Hidden_states
     export SAVE_ATT_DIR=/dataspace/Attention
     export dataset=/workspace/Test_data &&
-    export dataname=longchat &&
+    export dataname=longchat && # nqa, tqa, hotpotqa, gov_report, videomme, mvbench
     python3 Attention.py \
     --model_id \$MODEL_ID \
     --model \$MODEL \
