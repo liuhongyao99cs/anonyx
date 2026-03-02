@@ -146,7 +146,6 @@ Please follow the instructions below based on your hardware platform.
     ```   
 
 ### Option 2: NVIDIA Jetson Orin NX / AGX Orin
-> **Target Hardware:** ARM64 / Tegra
 
 Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64, we recommend using [jetson-containers](https://github.com/dusty-nv/jetson-containers).
 
@@ -177,7 +176,7 @@ Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64
 - [CacheGen](https://github.com/UChi-JCL/CacheGen) — Arithmetic encoding CUDA library
 - [Flash Attention](https://github.com/Dao-AILab/flash-attention) — Efficient attention implementation
 - [jetson-containers](https://github.com/dusty-nv/jetson-containers) — ARM64 container support
-<p align="center"> Made with ❤️ by the WiKV Team </p> ```
+<p align="center"> Made with ❤️ by the WiKV Team </p> 
 
 ---
 
