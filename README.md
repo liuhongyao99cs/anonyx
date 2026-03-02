@@ -237,8 +237,8 @@ export OSS_BUCKET_NAME="your-bucket-name"
 ```
 
 ### How to achieve 90-100 MB/s download from bucket?
--Check the capability of your NIC and stay in a good network env
--Enable CDN and transfer acceleration in Aliyun oss control panel
--Multi-threading & Multi-part download
+- Check the capability of your NIC and stay in a good network env
+- Enable CDN and transfer acceleration in Aliyun oss control panel
+- Multi-threading & Multi-part download
 
-### Extention to other cloud server such as Google and AWS.
+### Extention to other cloud servers such as Google and AWS.
