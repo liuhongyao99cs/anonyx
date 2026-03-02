@@ -835,6 +835,7 @@ class WiKV_Controller:
             seq_len = input_idx.shape[1]
 
             # This is warm up stage
+            """
             with torch.no_grad():
                 generated = model.generate(
                     input_idx, 
@@ -857,8 +858,9 @@ class WiKV_Controller:
             decide = self.model.decision_function(data)[0]
             startx = time.perf_counter()
             del generated
+            """
             self.warm_up.set()
-
+            startx = time.perf_counter()
             for k in range(max_new_tokens):
 
                 # max time ddl for 1st token or next tokens
@@ -913,7 +915,7 @@ class WiKV_Controller:
 
                         del kv_tmp
 
-                        if (decide <= 1e-2) and ((time.perf_counter() - token_st) < ddl) :
+                        if (decide <= 1e-1) and ((time.perf_counter() - token_st) < ddl) :
                             self.step = 0.25/ ( 1 + 10 * math.e ** (-decide / 20))
                             del generated
                             #print("not enough")
