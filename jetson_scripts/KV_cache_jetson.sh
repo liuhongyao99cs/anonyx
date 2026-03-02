@@ -15,7 +15,7 @@ sudo docker run -it --rm \
     export SAVE_DIR=/dataspace/KV_cache &&
     export dataset=/workspace/Test_data &&
 
-    export dataname=longchat &&
+    export dataname=longchat && # nqa, tqa, hotpotqa, gov_report, videomme, mvbench
     python3 KV_cache.py \
     --model_id \$MODEL_ID \
     --model \$MODEL \
