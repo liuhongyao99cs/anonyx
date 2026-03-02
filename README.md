@@ -149,3 +149,21 @@ bash prefill.sh
 ```
 ### Some tips:
 1. param -- end_2_end: Be setting to 0, we are running using a network trace instread of real end-to-end decoding and kv streaming from a cloud; set to 1, we are decoding while downloading KV cache from Aliyun OSS system
+{
+  "usage_tips_and_configuration": {
+    "title": "💡 Usage Tips & Aliyun OSS Configuration",
+    "execution_parameters": {
+      "--end_2_end 0": "Running using a network trace instead of real end-to-end decoding and kv streaming from a cloud.",
+      "--end_2_end 1": "Decoding while downloading KV cache from Aliyun OSS system."
+    },
+    "aliyun_oss_configuration": {
+      "instruction": "To enable real-time end-to-end decoding, configure your OSS credentials as follows:",
+      "credentials": {
+        "OSS_ACCESS_KEY_ID": "Your_Access_Key_ID",
+        "OSS_ACCESS_KEY_SECRET": "Your_Access_Key_Secret",
+        "OSS_ENDPOINT": "oss-cn-hangzhou.aliyuncs.com",
+        "OSS_BUCKET_NAME": "your-bucket-name"
+      }
+    }
+  }
+}
