@@ -63,16 +63,7 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 
 ---
 
-## 🏆 Key Results Summary in tasks with text contexts
-
-| Baseline | TTFT Speedup | Quality Preservation |
-|----------|--------------|---------------------|
-| CacheGen | **2.8x** | ✅ Improved |
-| Prefill | **2.8x** | ✅ Maintained |
-| KIVI | **4.1x** | ✅ Maintained |
-
-
-**4. Video Understanding**
+#### 4️⃣ Video Understanding
 
 After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question correctly.
 
@@ -94,6 +85,27 @@ After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question 
 | **WiKV** | C | **0.94s** ⚡ |
 | CacheGen | C | 2.04s |
 | KIVI | C | 2.43s |
+
+---
+
+## 🏆 Key Results Summary
+
+### Text Context Tasks
+
+| Baseline | TTFT Speedup | Quality Preservation |
+|----------|--------------|---------------------|
+| CacheGen | **2.8x** | ✅ Improved |
+| Prefill | **2.8x** | ✅ Maintained |
+| KIVI | **4.1x** | ✅ Maintained |
+
+### Video Understanding Task
+
+| Method | TTFT | Speedup vs WiKV |
+|--------|------|-----------------|
+| **WiKV** | **0.94s** | — (Fastest) |
+| CacheGen | 2.04s | 2.2x slower |
+| KIVI | 2.43s | 2.6x slower |
+
 
 ---
 
@@ -127,7 +139,7 @@ Please follow the instructions below based on your hardware platform.
 
  
 4.  **Install Arithmetic encoding cuda libarary**
-    Download the appropriate wheel from CacheGen (https://github.com/UChi-JCL/CacheGen) and install it.
+    Download the appropriate wheel from CacheGen (https://github.com/UChi-JCL/CacheGen) and install it. Thanks to the CacheGen team for their solid implementation.
     ```bash
     cd LMCache/third_party/torchac_cuda 
     python setup.py install
@@ -137,7 +149,6 @@ Please follow the instructions below based on your hardware platform.
 **Target Hardware:** ARM64 / Tegra
 
 Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64, we recommend using [jetson-containers](https://github.com/dusty-nv/jetson-containers).
-
 
 
 1.  **Build Base Container**
