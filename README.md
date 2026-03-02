@@ -1,9 +1,4 @@
-# 🚀 WiKV: Efficient On-Device LLM Inference
-
-<p align="center">
-  <strong>Progressive KV Streaming & Pace Decoding for Mobile LLMs</strong>
-</p>
-
+# 🚀 WiKV: Efficient On-Device LLM Inference via Progressive KV Streaming & Pace Decoding for Mobile and On-device LLMs
 <p align="center">
   <img src="https://img.shields.io/badge/TTFT-2.8x%20Faster-blue?style=for-the-badge" alt="TTFT Speedup">
    <img src="https://img.shields.io/badge/Energy saving-108x%20Faster-blue?style=for-the-badge" alt="Energy saving">
