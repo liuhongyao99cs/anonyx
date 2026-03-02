@@ -113,8 +113,9 @@ After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question 
 
 Please follow the instructions below based on your hardware platform.
 
-### Option 1: Linux Laptop (x86-64)
-**Target Hardware:** RTX 5080 Mobile / Linux x86-64
+### 💻 Option 1: Linux Laptop (x86-64)
+
+> **Target Hardware:** RTX 5080 Mobile / Linux x86-64 (Ubuntu 24.04)
 
 1.  **Setup Python Environment**
     Create a virtual environment using Miniconda and install dependencies.
@@ -136,17 +137,16 @@ Please follow the instructions below based on your hardware platform.
     # Example command (ensure the filename matches your downloaded wheel)
     pip install flash_attn-2.8.1+cu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
     ```
-
  
 4.  **Install Arithmetic encoding cuda libarary**
-    Download the appropriate wheel from CacheGen (https://github.com/UChi-JCL/CacheGen) and install it. Thanks to the CacheGen team for their solid implementation.
+    Download the appropriate wheel from CacheGen (https://github.com/UChi-JCL/CacheGen) and install it. 
     ```bash
     cd LMCache/third_party/torchac_cuda 
     python setup.py install
     ```   
 
 ### Option 2: NVIDIA Jetson Orin NX / AGX Orin
-**Target Hardware:** ARM64 / Tegra
+> **Target Hardware:** ARM64 / Tegra
 
 Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64, we recommend using [jetson-containers](https://github.com/dusty-nv/jetson-containers).
 
@@ -172,6 +172,12 @@ Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64
     ```bash
     sudo docker build -t wikv .
     ```
+## 🙏 Acknowledgments
+
+- [CacheGen](https://github.com/UChi-JCL/CacheGen) — Arithmetic encoding CUDA library
+- [Flash Attention](https://github.com/Dao-AILab/flash-attention) — Efficient attention implementation
+- [jetson-containers](https://github.com/dusty-nv/jetson-containers) — ARM64 container support
+<p align="center"> Made with ❤️ by the WiKV Team </p> ```
 
 ---
 
