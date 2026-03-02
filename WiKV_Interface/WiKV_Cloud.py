@@ -2,7 +2,7 @@
 WiKV Cloud - OSS KV Cache Compressed Transfer Module
 
 Features:
-1. Encode KV cache using Inflation_Control_v1
+1. Encode KV cache 
 2. Upload compressed files to Aliyun OSS
 3. Download compressed files from OSS
 4. Decode and restore original KV cache
