@@ -1,8 +1,14 @@
-# A new framework enabling efficient inference of on-device LLMs
+# 🚀 WiKV: Efficient On-Device LLM Inference
 
+<p align="center">
+  <strong>Progressive KV Streaming & Pace Decoding for Mobile LLMs</strong>
+</p>
 
-The design overlaps wireless KV progressive streaming with pacing token decoding to significantly reduce the Time-to-First-Token (TTFT) and overall latency of Large Language Model (LLM) inference on mobile and IoT devices.
-
+<p align="center">
+  <img src="https://img.shields.io/badge/TTFT-2.8x%20Faster-blue?style=for-the-badge" alt="TTFT Speedup">
+  <img src="https://img.shields.io/badge/Platform-Mobile%20%7C%20IoT-green?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
+</p>
 ---
 
 ## 📊 Inference Comparison
@@ -14,7 +20,7 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 
 **1. Long report summary**
 <p align="center">
-  <img src="images/tt_summary.gif" alt="WiKV Government Report Summary" width="95%">
+  <img src="images/tt_summary.gif" alt="WiKV Government Report Summary" width="100%">
 </p>
 
 Compared with **CacheGen**, Reduce TTFT by 2.8x while summarizing the report with higher F1 score.
