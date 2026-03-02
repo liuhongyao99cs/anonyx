@@ -1,161 +1,194 @@
-accelerate==1.10.1
-aiohappyeyeballs==2.6.1
-aiohttp==3.12.15
-aiosignal==1.4.0
-anyio @ file:///croot/anyio_1745334642479/work
-argon2-cffi @ file:///opt/conda/conda-bld/argon2-cffi_1645000214183/work
-argon2-cffi-bindings @ file:///home/task_175792493437065/conda-bld/argon2-cffi-bindings_1757924978114/work
-asttokens @ file:///croot/asttokens_1743630435401/work
-async-lru @ file:///croot/async-lru_1699554519285/work
-async-timeout==5.0.1
-attrs @ file:///croot/attrs_1734533101012/work
-babel @ file:///croot/babel_1737454360933/work
-beautifulsoup4 @ file:///croot/beautifulsoup4-split_1756453090369/work
-bitsandbytes==0.47.0
-bleach @ file:///croot/bleach_1732290411627/work
-brotlicffi @ file:///croot/brotlicffi_1736182461069/work
-certifi @ file:///croot/certifi_1754570635119/work/certifi
-cffi @ file:///croot/cffi_1736182485317/work
-charset-normalizer @ file:///croot/charset-normalizer_1721748349566/work
-comm @ file:///croot/comm_1709322850197/work
-contourpy==1.3.2
-cycler==0.12.1
-datasets==4.1.1
-debugpy @ file:///home/task_175706711740264/conda-bld/debugpy_1757067131873/work
-decorator @ file:///home/task_175734097812358/conda-bld/decorator_1757341231906/work
-defusedxml @ file:///tmp/build/80754af9/defusedxml_1615228127516/work
-dill==0.4.0
-einops==0.8.1
-exceptiongroup @ file:///croot/exceptiongroup_1706031385326/work
-executing @ file:///home/task_175706097762404/conda-bld/executing_1757061230060/work
-fastjsonschema @ file:///croot/python-fastjsonschema_1731939362158/work
-filelock==3.19.1
-flash_attn @ file:///home/hoongyao/%E4%B8%8B%E8%BD%BD/flash_attn-2.8.1%2Bcu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl#sha256=2b607ac503f5913f4aecd62408d0745ad5af6ecc59d4f96f90c30d3fe7a9e9dd
-fonttools==4.60.0
-frozenlist==1.7.0
-fsspec==2025.9.0
-h11 @ file:///croot/h11_1748442006460/work
-hf-xet==1.1.10
-httpcore @ file:///croot/httpcore_1748526048470/work
-httpx @ file:///croot/httpx_1746747840559/work
-huggingface-hub==0.35.0
-idna==3.10
-ipykernel @ file:///home/task_175758317055216/conda-bld/ipykernel_1757583366251/work
-ipython @ file:///croot/ipython_1734548052611/work
-ipywidgets @ file:///croot/ipywidgets_1733504575802/work
-jedi @ file:///croot/jedi_1733987392413/work
-Jinja2 @ file:///croot/jinja2_1741710844255/work
-joblib==1.5.2
-json5 @ file:///croot/json5_1730786798687/work
-jsonschema @ file:///croot/jsonschema_1753206402902/work
-jsonschema-specifications @ file:///croot/jsonschema-specifications_1699032386549/work
-jupyter @ file:///croot/jupyter_1737645803214/work
-jupyter-console @ file:///croot/jupyter_console_1679999630278/work
-jupyter-events @ file:///croot/jupyter_events_1741184577592/work
-jupyter-lsp @ file:///croot/jupyter-lsp-meta_1745827015155/work
-jupyter_client @ file:///croot/jupyter_client_1737570961872/work
-jupyter_core @ file:///croot/jupyter_core_1751991368470/work
-jupyter_server @ file:///croot/jupyter_server_1751996616172/work
-jupyter_server_terminals @ file:///croot/jupyter_server_terminals_1744706698694/work
-jupyterlab @ file:///home/task_175812493204303/conda-bld/jupyterlab_1758124979512/work
-jupyterlab_pygments @ file:///croot/jupyterlab_pygments_1741124142640/work
-jupyterlab_server @ file:///croot/jupyterlab_server_1725865349919/work
-jupyterlab_widgets @ file:///croot/jupyterlab_widgets_1752066547979/work
-kiwisolver==1.4.9
-MarkupSafe @ file:///croot/markupsafe_1738584038848/work
-matplotlib==3.10.6
-matplotlib-inline @ file:///home/task_175851935243965/conda-bld/matplotlib-inline_1758520102257/work
-mistune @ file:///croot/mistune_1741124011532/work
-mpmath==1.3.0
-multidict==6.6.4
-multiprocess==0.70.16
-nbclient @ file:///croot/nbclient_1741123995822/work
-nbconvert @ file:///croot/nbconvert-meta_1741184653315/work
-nbformat @ file:///croot/nbformat_1728049424075/work
-nest-asyncio @ file:///croot/nest-asyncio_1708532673751/work
-networkx==3.4.2
-notebook @ file:///croot/notebook_1756709302552/work
-notebook_shim @ file:///croot/notebook-shim_1741707758683/work
-numpy==2.2.6
-nvidia-cublas-cu12==12.8.3.14
-nvidia-cuda-cupti-cu12==12.8.57
-nvidia-cuda-nvrtc-cu12==12.8.61
-nvidia-cuda-runtime-cu12==12.8.57
-nvidia-cudnn-cu12==9.7.1.26
-nvidia-cufft-cu12==11.3.3.41
-nvidia-cufile-cu12==1.13.0.11
-nvidia-curand-cu12==10.3.9.55
-nvidia-cusolver-cu12==11.7.2.55
-nvidia-cusparse-cu12==12.5.7.53
-nvidia-cusparselt-cu12==0.6.3
-nvidia-nccl-cu12==2.26.2
-nvidia-nvjitlink-cu12==12.8.61
-nvidia-nvshmem-cu12==3.3.24
-nvidia-nvtx-cu12==12.8.55
-overrides @ file:///croot/overrides_1699371140756/work
-packaging @ file:///croot/packaging_1753775359799/work
-pandas==2.3.2
-pandocfilters @ file:///home/task_175697776040858/conda-bld/pandocfilters_1756977776075/work
-parso @ file:///croot/parso_1733963305961/work
-pexpect @ file:///croot/pexpect_1750072593878/work
-pillow==11.3.0
-platformdirs @ file:///croot/platformdirs_1744273042065/work
-prometheus_client @ file:///croot/prometheus_client_1744271615306/work
-prompt-toolkit @ file:///croot/prompt-toolkit_1704404351921/work
-propcache==0.3.2
-psutil @ file:///home/task_175710406307107/conda-bld/psutil_1757104540420/work
-ptyprocess @ file:///tmp/build/80754af9/ptyprocess_1609355006118/work/dist/ptyprocess-0.7.0-py2.py3-none-any.whl
-pure_eval @ file:///home/task_175706683913895/conda-bld/pure_eval_1757067047727/work
-pyarrow==21.0.0
-pycparser @ file:///home/task_175749556993857/conda-bld/pycparser_1757496041120/work
-Pygments @ file:///croot/pygments_1744664109463/work
-pyparsing==3.2.4
-PyQt6==6.9.1
-PyQt6_sip @ file:///home/task_175751008770153/conda-bld/pyqt-split_1757511022671/work/pyqt_sip
-PySocks @ file:///home/builder/ci_310/pysocks_1640793678128/work
-python-dateutil @ file:///croot/python-dateutil_1716495738603/work
-python-json-logger @ file:///croot/python-json-logger_1734370021104/work
-pytorch-triton==3.5.0+git5ae38bdb
-pytz==2025.2
-PyYAML @ file:///croot/pyyaml_1728657952215/work
-pyzmq @ file:///home/task_175810350577126/conda-bld/pyzmq_1758103934957/work
-qtconsole @ file:///croot/qtconsole_1744633877544/work
-QtPy @ file:///home/task_175753110414453/conda-bld/qtpy_1757531151288/work
-referencing @ file:///croot/referencing_1699012038513/work
-regex==2025.9.18
-requests @ file:///croot/requests_1756709366904/work
-rfc3339-validator @ file:///croot/rfc3339-validator_1683077044675/work
-rfc3986-validator @ file:///croot/rfc3986-validator_1683058983515/work
-rpds-py @ file:///croot/rpds-py_1736541261634/work
-safetensors==0.6.2
-scikit-learn==1.7.2
-scipy==1.15.3
-Send2Trash @ file:///croot/send2trash_1736540790175/work
-sip @ file:///croot/sip_1756223371714/work
-six @ file:///croot/six_1744271502820/work
-sniffio @ file:///croot/sniffio_1705431295498/work
-soupsieve @ file:///croot/soupsieve_1696347547217/work
-stack_data @ file:///home/task_175706683891681/conda-bld/stack_data_1757067036413/work
-sympy==1.14.0
-terminado @ file:///home/task_175793485177418/conda-bld/terminado_1757934866953/work
-threadpoolctl==3.6.0
-tinycss2 @ file:///croot/tinycss2_1738337643607/work
-tokenizers==0.22.1
-tomli @ file:///croot/tomli_1753774587605/work
-torch==2.7.1+cu128
-torchaudio==2.7.1+cu128
-torchvision==0.22.1+cu128
-tornado @ file:///croot/tornado_1748956929273/work
-tqdm==4.67.1
-traitlets @ file:///croot/traitlets_1718227057033/work
-transformers==4.56.2
-triton==3.3.1
-typing_extensions @ file:///croot/typing_extensions_1756280817316/work
-tzdata==2025.2
-urllib3 @ file:///croot/urllib3_1750775463400/work
-wcwidth @ file:///croot/wcwidth_1750352883074/work
-webencodings==0.5.1
-websocket-client @ file:///croot/websocket-client_1715878298792/work
-widgetsnbextension @ file:///croot/widgetsnbextension_1733439572884/work
-xxhash==3.5.0
-yarl==1.20.1
+Name: accelerate
+Requires: huggingface_hub, numpy, packaging, psutil, pyyaml, safetensors, torch
+Name: aiohappyeyeballs
+Requires: 
+Name: aiohttp
+Requires: aiohappyeyeballs, aiosignal, async-timeout, attrs, frozenlist, multidict, propcache, yarl
+Name: aiosignal
+Requires: frozenlist, typing-extensions
+Name: aliyun-python-sdk-core
+Requires: cryptography, jmespath
+Name: aliyun-python-sdk-kms
+Requires: aliyun-python-sdk-core
+Name: anyio
+Requires: exceptiongroup, idna, typing_extensions
+Name: async-timeout
+Requires: 
+Name: attrs
+Requires: 
+Name: av
+Requires: 
+Name: bitsandbytes
+Requires: numpy, torch
+Name: certifi
+Requires: 
+Name: cffi
+Requires: pycparser
+Name: charset-normalizer
+Requires: 
+Name: cmake
+Requires: 
+Name: crcmod
+Requires: 
+Name: cryptography
+Requires: cffi, typing-extensions
+Name: datasets
+Requires: dill, filelock, fsspec, httpx, huggingface-hub, multiprocess, numpy, packaging, pandas, pyarrow, pyyaml, requests, tqdm, xxhash
+Name: decord
+Requires: numpy
+Name: dill
+Requires: 
+Name: einops
+Requires: 
+Name: exceptiongroup
+Requires: typing-extensions
+Name: ffmpeg
+Requires: 
+Name: filelock
+Requires: 
+Name: flash_attn
+Requires: einops, torch
+Name: frozenlist
+Requires: 
+Name: fsspec
+Requires: 
+Name: h11
+Requires: 
+Name: hf-xet
+Requires: 
+Name: httpcore
+Requires: certifi, h11
+Name: httpx
+Requires: anyio, certifi, httpcore, idna
+Name: huggingface-hub
+Requires: filelock, fsspec, hf-xet, packaging, pyyaml, requests, tqdm, typing-extensions
+Name: idna
+Requires: 
+Name: Jinja2
+Requires: MarkupSafe
+Name: jmespath
+Requires: 
+Name: joblib
+Requires: 
+Name: MarkupSafe
+Requires: 
+Name: mpmath
+Requires: 
+Name: multidict
+Requires: typing-extensions
+Name: multiprocess
+Requires: dill
+Name: networkx
+Requires: 
+Name: ninja
+Requires: 
+Name: numpy
+Requires: 
+Name: nvidia-cublas-cu12
+Requires: 
+Name: nvidia-cuda-cupti-cu12
+Requires: 
+Name: nvidia-cuda-nvrtc-cu12
+Requires: 
+Name: nvidia-cuda-runtime-cu12
+Requires: 
+Name: nvidia-cudnn-cu12
+Requires: nvidia-cublas-cu12
+Name: nvidia-cufft-cu12
+Requires: nvidia-nvjitlink-cu12
+Name: nvidia-cufile-cu12
+Requires: 
+Name: nvidia-curand-cu12
+Requires: 
+Name: nvidia-cusolver-cu12
+Requires: nvidia-cublas-cu12, nvidia-cusparse-cu12, nvidia-nvjitlink-cu12
+Name: nvidia-cusparse-cu12
+Requires: nvidia-nvjitlink-cu12
+Name: nvidia-cusparselt-cu12
+Requires: 
+Name: nvidia-nccl-cu12
+Requires: 
+Name: nvidia-nvjitlink-cu12
+Requires: 
+Name: nvidia-nvtx-cu12
+Requires: 
+Name: opencv-python
+Requires: numpy
+Name: oss2
+Requires: aliyun-python-sdk-core, aliyun-python-sdk-kms, crcmod, pycryptodome, requests, six
+Name: packaging
+Requires: 
+Name: pandas
+Requires: numpy, python-dateutil, pytz, tzdata
+Name: pathspec
+Requires: 
+Name: pillow
+Requires: 
+Name: propcache
+Requires: 
+Name: psutil
+Requires: 
+Name: pyarrow
+Requires: 
+Name: pycparser
+Requires: 
+Name: pycryptodome
+Requires: 
+Name: python-dateutil
+Requires: six
+Name: pytz
+Requires: 
+Name: PyYAML
+Requires: 
+Name: qwen-vl-utils
+Requires: av, packaging, pillow, requests
+Name: regex
+Requires: 
+Name: requests
+Requires: certifi, charset_normalizer, idna, urllib3
+Name: safetensors
+Requires: 
+Name: scikit-learn
+Requires: joblib, numpy, scipy, threadpoolctl
+Name: scikit_build_core
+Requires: exceptiongroup, packaging, pathspec, tomli
+Name: scipy
+Requires: numpy
+Name: six
+Requires: 
+Name: spas_sage_attn
+Requires: 
+Name: sympy
+Requires: mpmath
+Name: threadpoolctl
+Requires: 
+Name: tokenizers
+Requires: huggingface-hub
+Name: tomli
+Requires: 
+Name: torch
+Requires: filelock, fsspec, jinja2, networkx, nvidia-cublas-cu12, nvidia-cuda-cupti-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-runtime-cu12, nvidia-cudnn-cu12, nvidia-cufft-cu12, nvidia-cufile-cu12, nvidia-curand-cu12, nvidia-cusolver-cu12, nvidia-cusparse-cu12, nvidia-cusparselt-cu12, nvidia-nccl-cu12, nvidia-nvjitlink-cu12, nvidia-nvtx-cu12, sympy, triton, typing-extensions
+Name: torchac_cuda
+Requires: 
+Name: torchaudio
+Requires: torch
+Name: torchvision
+Requires: numpy, pillow, torch
+Name: tqdm
+Requires: 
+Name: transformers
+Requires: filelock, huggingface-hub, numpy, packaging, pyyaml, regex, requests, safetensors, tokenizers, tqdm
+Name: triton
+Requires: setuptools
+Name: typing_extensions
+Requires: 
+Name: tzdata
+Requires: 
+Name: urllib3
+Requires: 
+Name: xxhash
+Requires: 
+Name: yarl
+Requires: idna, multidict, propcache
+Name: yt-dlp
+Requires: 
