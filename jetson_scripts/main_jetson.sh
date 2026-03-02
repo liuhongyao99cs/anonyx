@@ -18,6 +18,7 @@ sudo docker run -it --rm \
     export SAVE_METRIC_DIR=/dataspace/metric &&
     export SAVE_ENCODE_DIR=/dataspace/Encode &&
     export SAVE_KV_DIR=/dataspace/KV_cache &&
+    export VIDEO_DIR=/dataspace/data1 &&
 
     export TRANSFORMERS_VERBOSITY=error &&
 
@@ -35,6 +36,8 @@ sudo docker run -it --rm \
     --save_hid_dir \${SAVE_HID_DIR}/\${MODEL}/\${dataname}/ \
     --save_att_dir \${SAVE_ATT_DIR}/\${MODEL}/\${dataname}/ \
     --save_encode_dir \${SAVE_ENCODE_DIR}/\${MODEL}/\${dataname}/ \
+    --end_2_end 1\
+    --video_dir \${VIDEO_DIR}/\${dataname}/ \
     --start  0 \
     --end 1 \
 
