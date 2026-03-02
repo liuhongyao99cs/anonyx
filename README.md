@@ -6,6 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/TTFT-2.8x%20Faster-blue?style=for-the-badge" alt="TTFT Speedup">
+   <img src="https://img.shields.io/badge/Energy saving-108x%20Faster-blue?style=for-the-badge" alt="Energy saving">
   <img src="https://img.shields.io/badge/Platform-Mobile%20%7C%20IoT-green?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
 </p>
