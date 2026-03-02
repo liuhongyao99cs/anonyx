@@ -79,10 +79,20 @@ Please follow the instructions below based on your hardware platform.
     pip install flash_attn-2.8.1+cu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
     ```
 
+ 
+4.  **Install Arithmetic encoding cuda libarary**
+    Download the appropriate wheel from CacheGen (https://github.com/UChi-JCL/CacheGen) and install it.
+    ```bash
+    cd LMCache/third_party/torchac_cuda 
+    python setup.py install
+    ```   
+
 ### Option 2: NVIDIA Jetson Orin NX / AGX Orin
 **Target Hardware:** ARM64 / Tegra
 
 Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64, we recommend using [jetson-containers](https://github.com/dusty-nv/jetson-containers).
+
+
 
 1.  **Build Base Container**
     Clone the repository and build a container with the necessary base libraries (PyTorch, Transformers, Flash-Attention, BitsAndBytes).
