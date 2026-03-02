@@ -46,16 +46,13 @@ p.add_argument("--end_2_end", type=int,default=0) # end_2_end = 1 means use true
 p.add_argument("--video_dir", type=str,default="")
 args = p.parse_args()
 
-model_name = args.model_id #"Qwen/Qwen3-4B"  # 
-model_N = args.model #"Qwen3-4B"
+model_name = args.model_id
+model_N = args.model 
 data_name = args.dataset_name
 
 # your hf account
 # login(token = "hf_xxx")
 
-
-login(token = "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")
-# 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
 
 if __name__ == "__main__":
 
