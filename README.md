@@ -234,6 +234,7 @@ export OSS_ACCESS_KEY_ID="Your_Access_Key_ID"
 export OSS_ACCESS_KEY_SECRET="Your_Access_Key_Secret"
 export OSS_ENDPOINT="oss-xx-city.aliyuncs.com"
 export OSS_BUCKET_NAME="your-bucket-name"
+```
 
 ### How to achieve 90-100 MB/s download from bucket?
 -Check the capability of your NIC and stay in a good network env
