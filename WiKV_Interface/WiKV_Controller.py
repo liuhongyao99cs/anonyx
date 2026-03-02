@@ -113,7 +113,7 @@ class WiKV_Controller:
         
         while next_k < file_num or not self.download_done_event.is_set():
             try:
-                k = self.download_queue.get(timeout=30)  # 等待下载完成信号
+                k = self.download_queue.get(timeout=30)  # Wait for download completion signal
                 
                 if k == next_k:  
                     start_time = time.time()
@@ -879,7 +879,7 @@ class WiKV_Controller:
                         #print(f"Prepare {self.threshold*100}% KV CACHE for token {k}: {elapsed_time:.4f}s")
                         #del kv_pace
                         start = time.perf_counter()
-                        #kv_tuple, _ = self.probe(kv_tuple, target_device='cuda:0')
+                        kv_tuple, _ = self.probe(kv_tuple, target_device='cuda:0')
                         kv_tmp = copy.deepcopy(kv_tuple)
                         with torch.no_grad():
                             generated = model.generate(
@@ -913,7 +913,7 @@ class WiKV_Controller:
 
                         del kv_tmp
 
-                        if (decide < 1e-2) and ((time.perf_counter() - token_st) < ddl) :
+                        if (decide <= 1e-2) and ((time.perf_counter() - token_st) < ddl) :
                             self.step = 0.25/ ( 1 + 10 * math.e ** (-decide / 20))
                             del generated
                             #print("not enough")
@@ -937,7 +937,7 @@ class WiKV_Controller:
                             kv_tuple = generated['past_key_values']
                                 
                             del generated  
-                            self.step = 0.08
+                            self.step = 0.1
                             break
                 
                 # all KV cache is streamed
@@ -986,7 +986,7 @@ class WiKV_Controller:
             RESET = '\033[0m'
             UNDERLINE = '\033[4m' 
             TALIC = '\033[3m'
-            BRIGHT_BLACK = '\033[90m'    # 灰色
+            BRIGHT_BLACK = '\033[90m'    # Gray
             BRIGHT_RED = '\033[91m'
             BRIGHT_GREEN = '\033[92m'
             BRIGHT_YELLOW = '\033[93m'
@@ -1139,7 +1139,7 @@ class WiKV_Controller:
                             kv_tuple = generated['past_key_values']
                                 
                             del generated  
-                            self.step = 0.15
+                            self.step = 0.1
                             break
                 
                 # all KV cache is streamed
