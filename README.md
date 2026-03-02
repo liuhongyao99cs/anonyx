@@ -47,7 +47,7 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 
 | Method | TTFT Reduction | Accuracy |
 |--------|----------------|----------|
-| **WiKV vs Prefill** | **2.8x faster** | Correct recall ✅ |
+| **WiKV vs Prefill** | **12.0x faster** | Correct recall ✅ |
 
 ---
 
@@ -95,7 +95,7 @@ After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question 
 | Baseline | TTFT Speedup | Quality Preservation |
 |----------|--------------|---------------------|
 | CacheGen | **2.8x** | ✅ Improved |
-| Prefill | **2.8x** | ✅ Maintained |
+| Prefill | **12.0x** | ✅ Maintained |
 | KIVI | **4.1x** | ✅ Maintained |
 
 ### Video Understanding Task
