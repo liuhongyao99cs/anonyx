@@ -22,6 +22,6 @@ sudo docker run -it --rm \
     --dataset_name \${dataname} \
     --path_to_context \${dataset}/\${dataname}.jsonl \
     --save_dir \${SAVE_DIR}/\${MODEL}/\${dataname}/ \
-    --start 9 \
+    --start 0 \
     --end 10 \
   "
