@@ -215,7 +215,10 @@ bash prefill.sh
 |-----------|-------------|
 | `--end_2_end 0` | Running using a network trace instead of real end-to-end decoding and KV streaming from a cloud. Cloud supported by this repo is Aliyun.|
 | `--end_2_end 1` | Decoding while downloading KV cache from Aliyun OSS system. |
-
+| `--xxx_dir` | Path to the storage folder for KV cache, attention, semantic sequence, encode bitstream, decoded kv tensor. |
+| `--video_dir` | For video datasets only, point to where you store the raw videos. |
+| `--start, end` | Index of the sample for testing. |
+| `--model, model_id` | LLM model name. |
 ---
 
 ## 💡 Usage of Aliyun OSS
@@ -233,6 +236,8 @@ export OSS_ENDPOINT="oss-xx-city.aliyuncs.com"
 export OSS_BUCKET_NAME="your-bucket-name"
 
 ### How to achieve 90-100 MB/s download from bucket?
--Check the capability of your NIC
+-Check the capability of your NIC and stay in a good network env
 -Enable CDN and transfer acceleration in Aliyun oss control panel
 -Multi-threading & Multi-part download
+
+### Extention to other cloud server such as Google and AWS.
