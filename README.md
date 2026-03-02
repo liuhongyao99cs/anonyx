@@ -1,7 +1,7 @@
 # 🚀 WiKV: Efficient On-Device LLM Inference via Progressive KV Streaming & Pace Decoding for Mobile and On-device LLMs
 <p align="center">
   <img src="https://img.shields.io/badge/TTFT-2.8x%20Faster-blue?style=for-the-badge" alt="TTFT Speedup">
-   <img src="https://img.shields.io/badge/Energy saving-108x%20Faster-blue?style=for-the-badge" alt="Energy saving">
+   <img src="https://img.shields.io/badge/Energy saving-108x%20Lower-blue?style=for-the-badge" alt="Energy saving">
   <img src="https://img.shields.io/badge/Platform-Mobile%20%7C%20IoT-green?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
 </p>
@@ -11,11 +11,11 @@
 
 WiKV is a novel framework that enables efficient inference of on-device Large Language Models (LLMs) through:
 
-- 🔄 **Progressive KV Streaming** — Overlaps wireless KV cache transmission with decoding
-- ⏱️ **Pace Decoding** — Optimizes token generation timing
+- 🔄 **Progressive KV Streaming** — Overlaps wireless KV cache transmission with decoding, transmit a semantic sequence of KV cache from cloud
+- ⏱️ **Pace Decoding** — decoding each token with an enough attention ratio predicted by a SVM predictor
 - 📉 **Significantly Reduced Latency** — Lower TTFT and overall inference time
 
-Designed for **mobile and IoT devices** while maintaining response quality.
+Designed for **mobile and IoT devices** to interact with cloud for KV cache management while maintaining response quality.
 
 ---
 
@@ -23,15 +23,19 @@ Designed for **mobile and IoT devices** while maintaining response quality.
 
 We benchmark WiKV against three standard inference baselines, evaluating both efficiency and response quality.
 
-### Demos
+### 🎬 Demos
 
+---
 
-**1. Long report summary**
+#### 1️⃣ Long Report Summary
+
 <p align="center">
   <img src="images/tt_summary.gif" alt="WiKV Government Report Summary" width="100%">
 </p>
 
-Compared with **CacheGen**, Reduce TTFT by 2.8x while summarizing the report with higher F1 score.
+| Method | TTFT Reduction | Quality |
+|--------|----------------|---------|
+| **WiKV vs CacheGen** | **2.8x faster** | Higher F1 Score ✅ |
 
 **2. Recall discussed topic**
 <p align="center">
