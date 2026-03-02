@@ -59,10 +59,10 @@ class WiKV_Encode:
         self.window_size = window_size
         self.device = device  # Save device
         # VLM
-        #self.bin_list = [46,46,46,46,46,46,46]
+        self.bin_list = [46,46,46,46,46,46,46]
         #self.bin_list = [32,32,28,24,24,20,16]
         # LLM
-        self.bin_list = [28,28,26,22,20,16]
+        #self.bin_list = [32,32,24,24,20,20]
         self.layer_group = 6
         self.batch_size = 20000
         self.max_deviation = 10000
@@ -1261,7 +1261,7 @@ class WiKV_Encode:
                 'max_q': max_q,
                 #'key_first': key_first,
                 #'val_first': val_first,
-                'modified_sequence': modified_sequence[idx-n_token*n_head*n_layer:idx,:].to(torch.int16),  # Use idx - size to get current segment
+                #'modified_sequence': modified_sequence[idx-n_token*n_head*n_layer:idx,:].to(torch.int16),  # Use idx - size to get current segment
                 # DEBUG
                 'debug_modified_seq_len': n_token*n_head*n_layer,
                 'debug_modified_seq_total': modified_sequence.shape[0],
@@ -1278,6 +1278,9 @@ class WiKV_Encode:
             # Save using pickle
             with open(output_path, 'wb') as f:
                 pickle.dump(encode_data, f)
+
+            # save the modifided_sequence in the local disk
+            torch.save(modified_sequence[idx-n_token*n_head*n_layer:idx,:].to(torch.int16), f'{self.args.save_encode_dir}Arithmetic_v2/kv_seq_{session_id}_seg_{i}.pt')
 
             #print(f"Saved encode data to: {output_path}")
         # Return directory path instead of single file path for multi-segment encoding
@@ -1300,7 +1303,8 @@ class WiKV_Encode:
         max_q = encode_data['max_q']
         #key_first = encode_data['key_first']
         #val_first = encode_data['val_first']
-        modified_sequence = encode_data['modified_sequence']
+        #modified_sequence = encode_data['modified_sequence']
+        modified_sequence = torch.load(f'{self.args.save_encode_dir}Arithmetic_v2/kv_seq_{session_id}_seg_{id}.pt')
         n_layer = encode_data['n_layer']
         n_head = encode_data['n_head']
         n_token = encode_data['n_token']
@@ -1341,7 +1345,7 @@ class WiKV_Encode:
         # =========================================================================
         # Step 4: Dequantize
         # =========================================================================
-        # 合并 key 和 value: [n_layer, 2, n_head, n_token, n_hidden]
+        # combine key and value: [n_layer, 2, n_head, n_token, n_hidden]
         kv_tensor = torch.stack([key_tensor, val_tensor], dim=1)
         kv_dequant = layer_dequantize(kv_tensor, max_q, bin_list, layer_group)
         #decoded = to_blob_cpu(kv_dequant)
