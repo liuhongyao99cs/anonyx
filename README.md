@@ -1,8 +1,8 @@
 # 🚀 WiKV: Efficient On-Device LLM Inference via Progressive KV Streaming & Pace Decoding for Mobile and On-device LLMs
 <p align="center">
-  <img src="https://img.shields.io/badge/TTFT-2.8x%20Faster-blue?style=for-the-badge" alt="TTFT Speedup">
+  <img src="https://img.shields.io/badge/TTFT-2.8x-5x%20Faster-blue?style=for-the-badge" alt="TTFT Speedup">
    <img src="https://img.shields.io/badge/Energy saving-108x%20Lower-blue?style=for-the-badge" alt="Energy saving">
-  <img src="https://img.shields.io/badge/Platform-Mobile%20%7C%20IoT-green?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-RTX 5080 mobile%20%7C%20Jetson-green?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
 </p>
 
@@ -37,20 +37,39 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 |--------|----------------|---------|
 | **WiKV vs CacheGen** | **2.8x faster** | Higher F1 Score ✅ |
 
-**2. Recall discussed topic**
+---
+
+#### 2️⃣ Recall Discussed Topic
+
 <p align="center">
   <img src="images/Topic.gif" alt="WiKV Question Answer" width="100%">
 </p>
 
-Compared with **Prefill**, Reduce TTFT by 2.8x while recall the first discussed topic correctly.
+| Method | TTFT Reduction | Accuracy |
+|--------|----------------|----------|
+| **WiKV vs Prefill** | **2.8x faster** | Correct recall ✅ |
 
+---
 
-**3. Question Answer**
+#### 3️⃣ Question Answer
+
 <p align="center">
   <img src="images/QA.gif" alt="WiKV Question Answer" width="100%">
 </p>
 
-Compared with **KIVI**, Reduce TTFT by 4.1x while maintaining the response quality.
+| Method | TTFT Reduction | Response Quality |
+|--------|----------------|------------------|
+| **WiKV vs KIVI** | **4.1x faster** | Maintained ✅ |
+
+---
+
+## 🏆 Key Results Summary in tasks with text contexts
+
+| Baseline | TTFT Speedup | Quality Preservation |
+|----------|--------------|---------------------|
+| CacheGen | **2.8x** | ✅ Improved |
+| Prefill | **2.8x** | ✅ Maintained |
+| KIVI | **4.1x** | ✅ Maintained |
 
 
 **4. Video Understanding**
