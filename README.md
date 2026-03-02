@@ -176,7 +176,7 @@ Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64
 - [CacheGen](https://github.com/UChi-JCL/CacheGen) — Arithmetic encoding CUDA library
 - [Flash Attention](https://github.com/Dao-AILab/flash-attention) — Efficient attention implementation
 - [jetson-containers](https://github.com/dusty-nv/jetson-containers) — ARM64 container support
-<p align="center"> Made with ❤️ by the WiKV Team </p> 
+<p align="left"> Made with ❤️ by the WiKV Team </p> 
 
 ---
 
@@ -213,12 +213,12 @@ bash prefill.sh
 
 | Parameter | Description |
 |-----------|-------------|
-| `--end_2_end 0` | Running using a network trace instead of real end-to-end decoding and KV streaming from a cloud. |
+| `--end_2_end 0` | Running using a network trace instead of real end-to-end decoding and KV streaming from a cloud. Cloud supported by this repo is Aliyun.|
 | `--end_2_end 1` | Decoding while downloading KV cache from Aliyun OSS system. |
 
 ---
 
-## 💡 Usage Tips & Aliyun OSS Configuration
+## 💡 Usage of Aliyun OSS
 
 To run the end-to-end decoding in this repo, you need to configure Aliyun OSS and create a bucket for KV cache storage.
 
@@ -231,3 +231,8 @@ export OSS_ACCESS_KEY_ID="Your_Access_Key_ID"
 export OSS_ACCESS_KEY_SECRET="Your_Access_Key_Secret"
 export OSS_ENDPOINT="oss-xx-city.aliyuncs.com"
 export OSS_BUCKET_NAME="your-bucket-name"
+
+### How to achieve 90-100 MB/s download from bucket?
+-Check the capability of your NIC
+-Enable CDN and transfer acceleration in Aliyun oss control panel
+-Multi-threading & Multi-part download
