@@ -7,7 +7,7 @@ export MODEL_ID=Qwen/Qwen3-4B
 export dataset=/home/xxx/data/test_data
 export SAVE_DIR=/home/xxx/data/KV_cache
 
-export dataname=longchat
+export dataname=longchat # nqa, tqa, hotpotqa, gov_report, videomme, mvbench
 python3 KV_cache.py \
     --model_id $MODEL_ID \
     --model $MODEL \
