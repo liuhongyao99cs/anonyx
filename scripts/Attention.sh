@@ -14,7 +14,7 @@ export dataset=/home/xxx/data/test_data
 export SAVE_HID_DIR=/home/xxx/data/Hidden_states
 export SAVE_ATT_DIR=/home/xxx/data/Attention
 
-export dataname=longchat
+export dataname=longchat # nqa, tqa, hotpotqa, gov_report, videomme, mvbench
 python3 Attention.py \
     --model_id $MODEL_ID \
     --model $MODEL \
