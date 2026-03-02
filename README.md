@@ -147,31 +147,25 @@ bash main.sh
 bash KIVI.sh
 bash prefill.sh
 ```
-### Parameters
-{
-  "Execution Parameters": {
-    "--end_2_end 0": "Running using a network trace instead of real end-to-end decoding and kv streaming from a cloud.",
-    "--end_2_end 1": "Decoding while downloading KV cache from Aliyun OSS system."
-  }
-}
+## ⚙️ Execution Parameters
 
-### 💡Usage Tips & Aliyun OSS Configuration
-{
-  To run the end 2 end in this repo, you need to config Aliyun oss and construct a bucket for KV cache storage.
-  "usage_tips_and_configuration": {
-    "title": "💡 Usage Tips & Aliyun OSS Configuration",
-    "execution_parameters": {
-      "--end_2_end 0": "Running using a network trace instead of real end-to-end decoding and kv streaming from a cloud.",
-      "--end_2_end 1": "Decoding while downloading KV cache from Aliyun OSS system."
-    },
-    "aliyun_oss_configuration": {
-      "instruction": "To enable real-time end-to-end decoding, configure your OSS credentials as follows:",
-      "credentials": {
-        "OSS_ACCESS_KEY_ID": "Your_Access_Key_ID",
-        "OSS_ACCESS_KEY_SECRET": "Your_Access_Key_Secret",
-        "OSS_ENDPOINT": "oss-xx-city.aliyuncs.com",
-        "OSS_BUCKET_NAME": "your-bucket-name"
-      }
-    }
-  }
-}
+| Parameter | Description |
+|-----------|-------------|
+| `--end_2_end 0` | Running using a network trace instead of real end-to-end decoding and KV streaming from a cloud. |
+| `--end_2_end 1` | Decoding while downloading KV cache from Aliyun OSS system. |
+
+---
+
+## 💡 Usage Tips & Aliyun OSS Configuration
+
+To run the end-to-end decoding in this repo, you need to configure Aliyun OSS and create a bucket for KV cache storage.
+
+### OSS Credentials Setup
+
+Set the following environment variables:
+
+```bash
+export OSS_ACCESS_KEY_ID="Your_Access_Key_ID"
+export OSS_ACCESS_KEY_SECRET="Your_Access_Key_Secret"
+export OSS_ENDPOINT="oss-xx-city.aliyuncs.com"
+export OSS_BUCKET_NAME="your-bucket-name"
