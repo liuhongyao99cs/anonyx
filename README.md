@@ -43,7 +43,7 @@ After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question 
 
 **Context:** When demonstrating the Germany modern Christmas tree is initially decorated with apples, candles and berries, which kind of the decoration has the largest number?, options:["A. Apples.","B. Candles.","C. Berries.","D. The three kinds are of the same number."]
 
-WiKV: C with TTFT 0.94 s
+WiKV: Answer: C Explanation: The video shows that the number of berries is the largest among the decorations mentioned. with TTFT 0.94 s
 
 CacheGen: C WITH TTFT 2.04s
 
