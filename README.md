@@ -139,7 +139,7 @@ Please follow the instructions below based on your hardware platform.
     ```
  
 4.  **Install Arithmetic encoding cuda libarary**
-    Download the appropriate wheel from CacheGen (https://github.com/UChi-JCL/CacheGen) and install it. 
+    Download the from CacheGen (https://github.com/UChi-JCL/CacheGen) and install it. 
     ```bash
     cd LMCache/third_party/torchac_cuda 
     python setup.py install
