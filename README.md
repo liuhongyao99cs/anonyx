@@ -147,3 +147,5 @@ bash main.sh
 bash KIVI.sh
 bash prefill.sh
 ```
+### Some tips:
+1. param -- end_2_end: Be setting to 0, we are running using a network trace instread of real end-to-end decoding and kv streaming from a cloud; set to 1, we are decoding while downloading KV cache from Aliyun OSS system
