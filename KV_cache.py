@@ -31,7 +31,7 @@ model_N = args.model
 data_name = args.dataset_name
 
 # HuggingFace authentication token
-login(token="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")
+login(token="xxx")
 
 if __name__ == "__main__":
     # Create output directory if it doesn't exist
