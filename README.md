@@ -236,7 +236,7 @@ export OSS_ENDPOINT="oss-xx-city.aliyuncs.com"
 export OSS_BUCKET_NAME="your-bucket-name"
 ```
 
-### How to achieve 90-100 MB/s download from bucket?
+### How to accelerate download?
 - Check the capability of your NIC and stay in a good network env
 - Enable CDN and transfer acceleration in Aliyun oss control panel
 - Multi-threading & Multi-part download
