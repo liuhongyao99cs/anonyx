@@ -59,10 +59,10 @@ class WiKV_Encode:
         self.window_size = window_size
         self.device = device  # Save device
         # VLM
-        self.bin_list = [46,46,46,46,46,46,46]
+        #self.bin_list = [46,46,46,46,46,46,46]
         #self.bin_list = [32,32,28,24,24,20,16]
         # LLM
-        #self.bin_list = [32,32,24,24,20,20]
+        self.bin_list = [32,32,24,24,20,20]
         self.layer_group = 6
         self.batch_size = 20000
         self.max_deviation = 10000
