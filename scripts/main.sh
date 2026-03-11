@@ -30,7 +30,7 @@ export SAVE_ATT_DIR=/home/xxx/data/Attention
 export SAVE_KV_DIR=/home/xxx/data/KV_cache
 export SAVE_ENCODE_DIR=/home/xxx/data/Encode
 export VIDEO_DIR=/home/xxx/data1
-export dataname=videomme 
+export dataname=longchat 
 
 python3 main.py \
     --model_id $MODEL_ID \
