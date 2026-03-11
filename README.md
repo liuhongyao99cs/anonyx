@@ -42,7 +42,7 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 #### 2️⃣ Recall Discussed Topic
 
 <p align="center">
-  <img src="images/Topic.gif" alt="WiKV Question Answer" width="80%">
+  <img src="images/Topic.gif" alt="WiKV Question Answer">
 </p>
 
 | Method | TTFT Reduction | Accuracy |
@@ -54,7 +54,7 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 #### 3️⃣ Question Answer
 
 <p align="center">
-  <img src="images/QA.gif" alt="WiKV Question Answer" width="80%">
+  <img src="images/QA.gif" alt="WiKV Question Answer">
 </p>
 
 | Method | TTFT Reduction | Response Quality |
