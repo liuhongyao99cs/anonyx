@@ -30,8 +30,8 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 #### 1️⃣ Long Report Summary
 
 <p align="center">
-  <img src="images/tt_summary.gif" alt="WiKV Government Report Summary" width="80%">
-</p>
+  <img src="images/tt_summary.gif" alt="WiKV Government Report Summary">
+</p>>
 
 | Method | TTFT Reduction | Quality |
 |--------|----------------|---------|
