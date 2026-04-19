@@ -1,4 +1,4 @@
-# 🚀 WiKV: Efficient On-Device LLM Inference via Progressive KV Streaming & Pace Decoding for Mobile and On-device LLMs
+# 🚀 CloudKV: Efficient On-Device LLM Inference via Progressive KV Streaming & Pace Decoding for Mobile and On-device LLMs
 <p align="center">
   <img src="https://img.shields.io/badge/TTFT-3--12x-brightgreen?style=for-the-badge">
    <img src="https://img.shields.io/badge/Energy saving-108x%20Lower-blue?style=for-the-badge" alt="Energy saving">
@@ -9,7 +9,7 @@
 ---
 ## 📖 Overview
 
-WiKV is a novel framework that enables efficient inference of on-device Large Language Models (LLMs) through:
+CloudKV is a novel framework that enables efficient inference of on-device Large Language Models (LLMs) through:
 
 - 🔄 **Progressive KV Streaming** — Overlaps wireless KV cache transmission with decoding, transmit a semantic sequence of KV cache from cloud
 - ⏱️ **Pace Decoding** — decoding each token with an enough attention ratio predicted by a SVM predictor
@@ -21,7 +21,7 @@ Designed for **mobile and IoT devices** to interact with cloud for KV cache mana
 
 ## 📊 Inference Comparison
 
-We benchmark WiKV against three standard inference baselines, evaluating both efficiency and response quality.
+We benchmark CloudKV against three standard inference baselines, evaluating both efficiency and response quality.
 
 ### 🎬 Demos
 
@@ -30,42 +30,42 @@ We benchmark WiKV against three standard inference baselines, evaluating both ef
 #### 1️⃣ Long Report Summary
 
 <p align="center">
-  <img src="images/tt_summary.gif" alt="WiKV Government Report Summary">
+  <img src="images/tt_summary.gif" alt="CloudKV Government Report Summary">
 </p>>
 
 | Method | TTFT Reduction | Quality |
 |--------|----------------|---------|
-| **WiKV vs CacheGen** | **2.8x faster** | Higher F1 Score ✅ |
+| **CloudKV vs CacheGen** | **2.8x faster** | Higher F1 Score ✅ |
 
 ---
 
 #### 2️⃣ Recall Discussed Topic
 
 <p align="center">
-  <img src="images/Topic.gif" alt="WiKV Question Answer">
+  <img src="images/Topic.gif" alt="CloudKV Question Answer">
 </p>
 
 | Method | TTFT Reduction | Accuracy |
 |--------|----------------|----------|
-| **WiKV vs Prefill** | **12.0x faster** | Correct recall ✅ |
+| **CloudKV vs Prefill** | **12.0x faster** | Correct recall ✅ |
 
 ---
 
 #### 3️⃣ Question Answer
 
 <p align="center">
-  <img src="images/QA.gif" alt="WiKV Question Answer">
+  <img src="images/QA.gif" alt="CloudKV Question Answer">
 </p>
 
 | Method | TTFT Reduction | Response Quality |
 |--------|----------------|------------------|
-| **WiKV vs KIVI** | **4.1x faster** | Maintained ✅ |
+| **CloudKV vs KIVI** | **4.1x faster** | Maintained ✅ |
 
 ---
 
 #### 4️⃣ Video Understanding
 
-After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question correctly.
+After watching the video at 2 fps, Qwen2.5-VL-7B with CloudKV answers the question correctly.
 
 > **[🎥 Click here to watch the demo video](https://www.youtube.com/watch?v=fFjv93ACGo8)**
 
@@ -82,7 +82,7 @@ After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question 
 
 | Method | Answer | TTFT |
 |--------|--------|------|
-| **WiKV** | C | **0.94s** ⚡ |
+| **CloudKV** | C | **0.94s** ⚡ |
 | CacheGen | C | 2.04s |
 | KIVI | C | 2.43s |
 
@@ -100,9 +100,9 @@ After watching the video at 2 fps, Qwen2.5-VL-7B with WiKV answers the question 
 
 ### Video Understanding Task
 
-| Method | TTFT | Speedup vs WiKV |
+| Method | TTFT | Speedup vs CloudKV |
 |--------|------|-----------------|
-| **WiKV** | **0.94s** | — (Fastest) |
+| **CloudKV** | **0.94s** | — (Fastest) |
 | CacheGen | 2.04s | 2.2x slower |
 | KIVI | 2.43s | 2.6x slower |
 
@@ -120,9 +120,9 @@ Please follow the instructions below based on your hardware platform.
 1.  **Setup Python Environment**
     Create a virtual environment using Miniconda and install dependencies.
     ```bash
-    cd DOWNLOAD_PATH/WiKV
-    conda env create -f env.yml -n WiKV
-    conda activate WiKV
+    cd DOWNLOAD_PATH/CloudKV
+    conda env create -f env.yml -n CloudKV
+    conda activate CloudKV
     ```
 
 2.  **Install PyTorch**
@@ -155,7 +155,7 @@ Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64
     ```bash
     git clone [https://github.com/dusty-nv/jetson-containers](https://github.com/dusty-nv/jetson-containers)
     bash jetson-containers/install.sh
-    jetson-containers build --name=wikv_container pytorch transformers flash-attention bitsandbytes
+    jetson-containers build --name=CloudKV_container pytorch transformers flash-attention bitsandbytes
     ```
 
 2.  **Extend Container**
@@ -163,20 +163,20 @@ Due to the difficulty of finding proper PyTorch/Flash-Attention wheels for ARM64
     
     **Create a Dockerfile:**
     ```dockerfile
-    FROM wikv_container:r36.4.tegra-aarch64-cu126-22.04
+    FROM CloudKV_container:r36.4.tegra-aarch64-cu126-22.04
     RUN pip install --no-cache-dir scikit-learn
     ```
     
     **Build the final image:**
     ```bash
-    sudo docker build -t wikv .
+    sudo docker build -t CloudKV .
     ```
 ## 🙏 Acknowledgments
 
 - [CacheGen](https://github.com/UChi-JCL/CacheGen) — Arithmetic encoding CUDA library
 - [Flash Attention](https://github.com/Dao-AILab/flash-attention) — Efficient attention implementation
 - [jetson-containers](https://github.com/dusty-nv/jetson-containers) — ARM64 container support
-<p align="left"> Made with ❤️ by the WiKV Team </p> 
+<p align="left"> Made with ❤️ by the CloudKV Team </p> 
 
 ---
 
@@ -203,7 +203,7 @@ Generate the KV cache for the datasets.
 bash KV_cache.sh
 ```
 
-### 3. Run WiKV or baselines of KIVI and Prefill
+### 3. Run CloudKV or baselines of KIVI and Prefill
 ```bash
 bash main.sh
 bash KIVI.sh
@@ -221,7 +221,7 @@ bash prefill.sh
 | `--model, model_id` | LLM model name. |
 ---
 
-## 💡 Usage of Aliyun OSS
+## 💡 Usage of Alibaba OSS
 
 To run the end-to-end decoding in this repo, you need to configure Aliyun OSS and create a bucket for KV cache storage.
 
